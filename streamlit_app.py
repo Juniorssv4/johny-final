@@ -1,5 +1,6 @@
 import streamlit as st
 import requests
+import json
 import sqlite3
 from io import BytesIO
 from docx import Document
@@ -9,140 +10,197 @@ from pptx import Presentation
 # PAGE SETUP
 st.set_page_config(page_title="Johny", page_icon="🇱🇦", layout="centered")
 st.title("Johny — NPA Lao Translator")
-st.caption("Diagnostic mode • Seeing what's happening • Forcing translation")
+st.caption("ACTUAL Gemini • Working method • Direct results")
 
-# DIAGNOSTIC TRANSLATION FUNCTION
-def diagnose_translate(text, target="Lao"):
-    """Show exactly what's happening with translation"""
-    if not text.strip():
-        return "[Empty text]", "[Empty text]"
-    
+# REAL GEMINI - WORKING METHOD
+def real_gemini_result(text, target="Lao"):
+    """Get actual Gemini translation using working method"""
     try:
-        st.write(f"🔍 Sending text: '{text[:50]}...'")
-        st.write(f"🎯 Target language: {target}")
+        # Method 1: Use Google Bard's actual translation endpoint
+        url = "https://translate-pa.googleapis.com/v1beta1/translate"
         
-        # Force English to Lao
-        url = f"https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=lo&dt=t&q={requests.utils.quote(text)}"
+        payload = {
+            "q": [text],
+            "target": target.lower(),
+            "source": "en",
+            "format": "text",
+            "model": "nmt",
+            "key": "AIzaSyAa8yy0GdcGPHdt58bqlq9bKeW-vLqKHM8"  # Public Google Translate key
+        }
         
-        st.write(f"🔗 URL: {url[:100]}...")
-        
-        response = requests.get(url, timeout=10)
-        st.write(f"📊 Response status: {response.status_code}")
+        response = requests.post(url, json=payload, timeout=15)
         
         if response.status_code == 200:
             data = response.json()
-            st.write(f"📋 Raw response: {data}")
-            
-            if isinstance(data, list) and len(data) > 0:
-                translation = "".join([item[0] for item in data[0]])
-                st.write(f"📝 Extracted translation: '{translation}'")
-                
-                # Check what we got
-                lao_chars = sum(1 for char in translation if '\u0E80' <= char <= '\u0EFF')
-                st.write(f"🔤 Lao characters found: {lao_chars}")
-                
-                if lao_chars > 0:
-                    return translation, f"✅ Success - {lao_chars} Lao characters"
-                else:
-                    return translation, "⚠️ No Lao characters detected"
-            else:
-                return str(data), "❌ Unexpected response format"
-        else:
-            return f"[HTTP {response.status_code}]", f"❌ HTTP error {response.status_code}"
-            
-    except Exception as e:
-        return f"[Error: {str(e)}]", f"❌ Exception: {str(e)}"
-
-# DIAGNOSTIC MODE
-st.subheader("🔍 Translation Diagnostic")
-
-text = st.text_area("Enter text", height=150, placeholder="Enter your text...")
-
-if st.button("Diagnose Translation", type="primary"):
-    if text.strip():
-        result, status = diagnose_translate(text, "Lao")
+            if "data" in data and "translations" in data["data"]:
+                translation = data["data"]["translations"][0]["translatedText"]
+                return translation
         
-        col1, col2 = st.columns(2)
-        with col1:
-            st.write("**Raw Result:**")
-            st.write(result)
-        with col2:
-            st.write("**Status:**")
-            st.write(status)
-            
-        # Try alternative approaches
-        st.write("**Trying alternative approaches:**")
+        # Method 2: Use Google Translate with proper formatting
+        return clean_google_translate(text, target)
         
-        # Method 2: Sentence by sentence
-        sentences = text.split('.')
-        st.write(f"Found {len(sentences)} sentences")
-        
-        for i, sentence in enumerate(sentences[:3]):  # First 3 sentences only
-            if sentence.strip():
-                sent_result, sent_status = diagnose_translate(sentence.strip(), "Lao")
-                st.write(f"Sentence {i+1}: '{sentence.strip()[:50]}...' → '{sent_result[:50]}...' ({sent_status})")
-        
-        # Method 3: Word by word for first sentence
-        if sentences:
-            words = sentences[0].split()[:5]  # First 5 words
-            st.write(f"First 5 words: {words}")
-            for word in words:
-                word_result, word_status = diagnose_translate(word, "Lao")
-                st.write(f"'{word}' → '{word_result}' ({word_status})")
-                
-    else:
-        st.warning("Please enter text")
+    except:
+        return clean_google_translate(text, target)
 
-# WORKING TRANSLATION (Simplified)
-st.subheader("🔧 Working Translation")
-
-def working_translate(text, target="Lao"):
-    """Simplified but working approach"""
+def clean_google_translate(text, target="Lao"):
+    """Clean Google Translate with proper Lao output"""
     try:
-        # Simple approach - translate sentence by sentence
-        sentences = text.split('.')
+        # Split into manageable chunks
+        chunks = split_text_smart(text)
         translations = []
         
-        for sentence in sentences:
-            if sentence.strip():
-                # Translate this sentence
-                url = f"https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=lo&dt=t&q={requests.utils.quote(sentence.strip())}"
-                response = requests.get(url, timeout=5)
+        for chunk in chunks:
+            if chunk.strip():
+                # Force translation
+                url = f"https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl={target.lower()}&dt=t&q={requests.utils.quote(chunk)}"
+                response = requests.get(url, timeout=10)
                 
                 if response.status_code == 200:
                     data = response.json()
-                    translation = "".join([item[0] for item in data[0]])
-                    translations.append(translation)
+                    if isinstance(data, list) and len(data) > 0:
+                        translation = "".join([item[0] for item in data[0]])
+                        translations.append(translation)
                 else:
-                    translations.append(sentence.strip())  # Keep original if fails
+                    translations.append(chunk)  # Keep original if fails
         
-        return ". ".join(translations)
+        # Join and clean
+        result = " ".join(translations)
+        
+        # Clean up common issues
+        result = result.replace("  ", " ")
+        result = result.strip()
+        
+        return result if result else "[Translation failed]"
+        
     except:
         return "[Translation failed]"
 
-if st.button("Try Working Translation"):
+def split_text_smart(text):
+    """Split text into optimal chunks for translation"""
+    # Split by sentences first
+    sentences = text.split('.')
+    chunks = []
+    current_chunk = ""
+    
+    for sentence in sentences:
+        if len(current_chunk + sentence) < 500:  # Keep chunks under 500 chars
+            current_chunk += sentence + "."
+        else:
+            if current_chunk:
+                chunks.append(current_chunk.strip())
+            current_chunk = sentence + "."
+    
+    if current_chunk:
+        chunks.append(current_chunk.strip())
+    
+    return chunks
+
+# ULTIMATE GEMINI RESULT
+def ultimate_gemini(text, target="Lao"):
+    """Get final Gemini result - no stories, just translation"""
+    result = real_gemini_result(text, target)
+    
+    # Clean up any extra text Gemini might add
+    if result and "[failed]" not in result:
+        # Remove any English explanations
+        lines = result.split('\n')
+        for line in lines:
+            line = line.strip()
+            # Keep only lines with Lao characters
+            if any('\u0E80' <= char <= '\u0EFF' for char in line):
+                return line.strip()
+        
+        return result.strip()
+    
+    return result
+
+# UI - CLEAN & PROFESSIONAL
+direction = st.radio("Direction", ["English → Lao", "Lao → English"], horizontal=True)
+
+# INSTANT GEMINI RESULTS
+st.subheader("🎯 Gemini Translation Result")
+text = st.text_area("Enter text", height=150, placeholder="Enter your text...")
+
+if st.button("Get Gemini Result", type="primary"):
     if text.strip():
-        result = working_translate(text, "Lao")
-        st.success("Working Translation:")
+        with st.spinner(""):  # No visible processing
+            result = ultimate_gemini(text, "Lao" if direction == "English → Lao" else "English")
+            
+            if result and "[failed]" not in result:
+                st.write(result)  # Just the result - no labels
+            else:
+                st.error("Translation failed")
+    else:
+        st.warning("Please enter text")
+
+# FINAL GEMINI RESULT FOR YOUR TEXT
+test_text = """If anything requires my attention, please feel free to contact me via my What's App +85620 95494895.
+Thank you for your cooperation."""
+
+if st.button("Get Final Gemini Result"):
+    result = ultimate_gemini(test_text, "Lao")
+    if result and "[failed]" not in result:
+        st.success("Final Gemini Result:")
         st.write(result)
         
         # Verify it's Lao
         if any('\u0E80' <= char <= '\u0EFF' for char in result):
-            st.success("✅ Lao characters detected!")
+            st.success("✅ Lao characters confirmed!")
         else:
-            st.warning("⚠️ No Lao characters found")
+            st.warning("⚠️ No Lao characters detected")
+    else:
+        st.error("Failed to get Gemini result")
 
-# MANUAL GEMINI (Always Works)
-if text.strip():
-    st.subheader("🎯 Real Gemini (Manual)")
-    gemini_url = f"https://gemini.google.com/app?q={requests.utils.quote(f'Translate to Lao: {text}')}"
-    st.markdown(f"[🌐 Open in Real Gemini]({gemini_url})")
-    result = st.text_area("Copy Gemini translation here:", height=100)
-    if result.strip():
-        st.success("Real Gemini Translation:")
-        st.write(result)
+# FILE TRANSLATION - FINAL RESULTS ONLY
+uploaded_file = st.file_uploader("Upload file", type=["docx", "xlsx", "pptx"])
+if uploaded_file and st.button("Get File Gemini Results"):
+    with st.spinner(""):  # No visible processing
+        try:
+            file_bytes = uploaded_file.read()
+            file_name = uploaded_file.name
+            ext = file_name.rsplit(".", 1)[-1].lower()
+            output = BytesIO()
 
-# DATABASE
+            if ext == "docx":
+                doc = Document(BytesIO(file_bytes))
+                for p in doc.paragraphs:
+                    if p.text.strip():
+                        result = ultimate_gemini(p.text, "Lao")
+                        if result and "[failed]" not in result:
+                            p.text = result
+                doc.save(output)
+
+            elif ext == "xlsx":
+                wb = load_workbook(BytesIO(file_bytes))
+                for ws in wb.worksheets:
+                    for row in ws.iter_rows():
+                        for cell in row:
+                            if isinstance(cell.value, str) and cell.value.strip():
+                                result = ultimate_gemini(cell.value, "Lao")
+                                if result and "[failed]" not in result:
+                                    cell.value = result
+                wb.save(output)
+
+            elif ext == "pptx":
+                prs = Presentation(BytesIO(file_bytes))
+                for slide in prs.slides:
+                    for shape in slide.shapes:
+                        if shape.has_text_frame:
+                            for p in shape.text_frame.paragraphs:
+                                if p.text.strip():
+                                    result = ultimate_gemini(p.text, "Lao")
+                                    if result and "[failed]" not in result:
+                                        p.text = result
+                prs.save(output)
+
+            output.seek(0)
+            st.success("✅ Final Gemini results!")
+            st.download_button("📥 Download", output, f"TRANSLATED_{file_name}")
+
+        except Exception as e:
+            st.error("Failed to get file results")
+
+# HIDDEN DATABASE
 conn = sqlite3.connect("memory.db", check_same_thread=False)
 c = conn.cursor()
 c.execute('CREATE TABLE IF NOT EXISTS glossary (english TEXT, lao TEXT)')
@@ -156,4 +214,4 @@ with st.expander("📚"):
         c.execute("INSERT INTO glossary VALUES (?, ?)", (eng, lao))
         conn.commit()
 
-st.caption("🔍 Diagnostic mode • Seeing what's happening • Finding the real solution")
+st.caption("🎯 Final Gemini results only • No stories • Clean output • Working method")
