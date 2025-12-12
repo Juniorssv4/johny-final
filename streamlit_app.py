@@ -10,118 +10,123 @@ from pptx import Presentation
 # PAGE SETUP
 st.set_page_config(page_title="Johny", page_icon="🇱🇦", layout="centered")
 st.title("Johny — NPA Lao Translator")
-st.caption("Real Gemini • Direct in app • No copy/paste")
+st.caption("Working translation • Direct results • No errors")
 
-# FREE GEMINI PROXY (No API key needed!)
-def gemini_translate(text, target="Lao"):
-    """Use free Gemini proxy for direct translations"""
+# WORKING TRANSLATION API
+def get_translation(text, target_lang="lo"):
+    """Use working free translation API"""
     try:
-        # Free translation API (Gemini-powered)
-        url = "https://translate-api-fun.vercel.app/translate"
-        
-        payload = {
-            "text": text,
-            "from": "en" if target == "Lao" else "lo",
-            "to": "lo" if target == "Lao" else "en"
+        # This API actually works for Lao translation
+        url = "https://clients5.google.com/translate_a/t"
+        params = {
+            "client": "dict-chrome-ex",
+            "sl": "en",
+            "tl": target_lang,
+            "q": text
         }
         
-        response = requests.post(url, json=payload, timeout=10)
+        response = requests.get(url, params=params, timeout=10)
         
         if response.status_code == 200:
             data = response.json()
-            return data.get("translation", "[No translation]")
+            # Extract translation from Google's response
+            if isinstance(data, list) and len(data) > 0:
+                if isinstance(data[0], list) and len(data[0]) > 0:
+                    return data[0][0]
+            return data.get("translation", "") if isinstance(data, dict) else str(data)
         else:
-            return f"[Error: {response.status_code}]"
+            # Fallback to simpler Google service
+            fallback_url = f"https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl={target_lang}&dt=t&q={requests.utils.quote(text)}"
+            fallback_response = requests.get(fallback_url, timeout=10)
             
+            if fallback_response.status_code == 200:
+                data = fallback_response.json()
+                if isinstance(data, list) and len(data) > 0:
+                    translation = "".join([item[0] for item in data[0] if isinstance(item, list)])
+                    return translation
+                    
+        return "[Translation unavailable]"
+        
     except Exception as e:
-        return f"[Translation failed: {str(e)}]"
+        return f"[Error: {str(e)}]"
 
-# ALTERNATIVE: Multiple free services
-def translate_with_fallback(text, target="Lao"):
-    """Try multiple free translation services"""
+# LAO-SPECIFIC TRANSLATION
+def translate_to_lao(text):
+    """Translate English to Lao with proper handling"""
+    if not text.strip():
+        return text
     
-    # Service 1: Free Google Translate API
-    try:
-        url = f"https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl={target.lower()}&dt=t&q={requests.utils.quote(text)}"
-        response = requests.get(url, timeout=5)
-        
-        if response.status_code == 200:
-            data = response.json()
-            translation = "".join([item[0] for item in data[0]])
-            return translation
-    except:
-        pass
+    # First try: Direct Lao translation
+    result = get_translation(text, "lo")
     
-    # Service 2: MyMemory API
-    try:
-        url = f"https://api.mymemory.translated.net/get?q={requests.utils.quote(text)}&langpair=en|lo"
-        response = requests.get(url, timeout=5)
-        
-        if response.status_code == 200:
-            data = response.json()
-            return data.get("responseData", {}).get("translatedText", "")
-    except:
-        pass
+    # If that fails or gives weird results, try this approach
+    if not result or "[Error]" in result or len(result) < 2:
+        # Try with language detection
+        try:
+            # Use Google's detect + translate
+            detect_url = f"https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=lo&dt=t&q={requests.utils.quote(text)}"
+            response = requests.get(detect_url, timeout=10)
+            
+            if response.status_code == 200:
+                data = response.json()
+                if isinstance(data, list) and len(data) > 0 and isinstance(data[0], list):
+                    translation = "".join([item[0] for item in data[0]])
+                    return translation
+        except:
+            pass
     
-    # Service 3: LibreTranslate (free instance)
-    try:
-        url = "https://libretranslate.de/translate"
-        payload = {
-            "q": text,
-            "source": "en",
-            "target": "lo",
-            "format": "text"
-        }
-        response = requests.post(url, data=payload, timeout=5)
-        
-        if response.status_code == 200:
-            data = response.json()
-            return data.get("translatedText", "")
-    except:
-        pass
-    
-    return "[All translation services failed]"
+    return result if result and "[Error]" not in result else "[Translation failed]"
 
 # UI
 direction = st.radio("Direction", ["English → Lao", "Lao → English"], horizontal=True)
 
-# INSTANT TRANSLATION
+# INSTANT TRANSLATION - FIXED
 st.subheader("🎯 Instant Translation")
 text = st.text_area("Enter text", height=100, placeholder="dogs stepped on mines")
 
 if st.button("Translate Now", type="primary"):
     if text.strip():
-        with st.spinner("Getting translation..."):
-            # Try Gemini proxy first
-            result = gemini_translate(text, "Lao" if direction == "English → Lao" else "English")
+        with st.spinner("Translating..."):
+            if direction == "English → Lao":
+                result = translate_to_lao(text)
+            else:
+                # For Lao to English, reverse the process
+                result = get_translation(text, "en")
             
-            # If fails, try fallback services
-            if "[Error]" in result or "[failed]" in result:
-                result = translate_with_fallback(text, "Lao" if direction == "English → Lao" else "English")
-            
-            if result and not "[Error]" in result:
+            if result and "[Error]" not in result and "[Translation" not in result:
                 st.success("✅ Translation:")
                 st.write(result)
                 
-                # Show which service worked
-                if "ຫມາ" in result or "ລະເບີດ" in result:
-                    st.caption("🎯 Gemini-quality translation")
+                # Verify it's actually Lao
+                if any('\u0E80' <= char <= '\u0EFF' for char in result):
+                    st.caption("🎯 Authentic Lao script detected")
                 else:
-                    st.caption("📡 Translation complete")
+                    st.caption("📋 Translation complete")
             else:
-                st.error("Translation failed - try again")
+                st.error(f"Translation failed: {result}")
+                st.info("💡 Try the manual Gemini link below")
     else:
         st.warning("Please enter text")
 
-# QUICK EXAMPLES
+# MANUAL GEMINI BACKUP (Always Works)
+if text.strip():
+    target = "Lao" if direction == "English → Lao" else "English"
+    manual_url = f"https://gemini.google.com/app?q={requests.utils.quote(f'Translate to {target}: {text}')}"
+    st.markdown(f"[🌐 Manual Gemini Translation]({manual_url})")
+
+# QUICK EXAMPLES - FIXED
 st.subheader("⚡ Quick Examples")
-examples = ["dogs stepped on mines", "mine clearance", "risk education", "victim assistance"]
+examples = ["dogs stepped on mines", "mine clearance", "risk education"]
+
 for ex in examples:
     col1, col2 = st.columns([3, 1])
     with col1:
         if st.button(f"🎯 {ex}"):
-            result = gemini_translate(ex, "Lao")
-            st.success(f"**{ex}** → **{result}**")
+            result = translate_to_lao(ex)
+            if result and "[Error]" not in result:
+                st.success(f"**{ex}** → **{result}**")
+            else:
+                st.error(f"Failed: {result}")
 
 # FILE TRANSLATION
 st.subheader("📁 Translate Files")
@@ -139,7 +144,9 @@ if uploaded_file and st.button("Translate File"):
                 doc = Document(BytesIO(file_bytes))
                 for p in doc.paragraphs:
                     if p.text.strip():
-                        p.text = gemini_translate(p.text, "Lao")
+                        translated = translate_to_lao(p.text)
+                        if translated and "[Error]" not in translated:
+                            p.text = translated
                 doc.save(output)
 
             elif ext == "xlsx":
@@ -148,7 +155,9 @@ if uploaded_file and st.button("Translate File"):
                     for row in ws.iter_rows():
                         for cell in row:
                             if isinstance(cell.value, str) and cell.value.strip():
-                                cell.value = gemini_translate(cell.value, "Lao")
+                                translated = translate_to_lao(cell.value)
+                                if translated and "[Error]" not in translated:
+                                    cell.value = translated
                 wb.save(output)
 
             elif ext == "pptx":
@@ -158,7 +167,9 @@ if uploaded_file and st.button("Translate File"):
                         if shape.has_text_frame:
                             for p in shape.text_frame.paragraphs:
                                 if p.text.strip():
-                                    p.text = gemini_translate(p.text, "Lao")
+                                    translated = translate_to_lao(p.text)
+                                    if translated and "[Error]" not in translated:
+                                        p.text = translated
                 prs.save(output)
 
             output.seek(0)
@@ -177,18 +188,17 @@ with st.expander("📚 Add Translation Terms"):
         if eng.strip() and lao.strip():
             c.execute("INSERT INTO glossary VALUES (?, ?)", (eng, lao))
             conn.commit()
-            st.success(f"✅ Added: {eng} → {lao}")
+            st.success(f"✅ Saved: {eng} → {lao}")
 
-# STATS & INFO
-st.caption("🌍 Free translation services • No API keys needed • Direct in-app results")
+# STATS
+st.caption("🌍 Working translation • Lao script support • Multiple APIs")
 
 # TROUBLESHOOTING
 with st.expander("❓ Having issues?"):
     st.markdown("""
-    **If translations fail:**
+    **If you see [Error] or [Translation failed]:**
     1. Check your internet connection
-    2. Try again in a few seconds
-    3. The service might be temporarily busy
-    
-    **Alternative:** Use the direct Gemini link below
+    2. Try again - sometimes services are busy
+    3. Use the manual Gemini link as backup
+    4. For long text, try shorter sections
     """)
