@@ -1,24 +1,24 @@
 import streamlit as st
 
-# Try Gemini safely
+import time
+
+# Try Grok safely (xAI API)
 
 try:
 
-    import google.generativeai as genai
+    from grok import Grok
 
-    genai.configure(api_key=st.secrets.get("GEMINI_API_KEY", "AIzaSyCNR-ebGbGVV_mdlSLJPBtB-iwGOE0cDwo"))
+    grok = Grok(api_key=st.secrets.get("GROK_API_KEY", "your_grok_key_here"))
 
-    model = genai.GenerativeModel('gemini-2.5-flash')
+    model = grok.Grok2()
 
 except:
 
-    genai = None
+    grok = None
 
     model = None
 
 import sqlite3
-
-import json
 
 from io import BytesIO
 
@@ -27,18 +27,6 @@ from docx import Document
 from openpyxl import load_workbook
 
 from pptx import Presentation
-
-# PDF support (optional)
-
-try:
-
-    from pdf2docx import Converter
-
-    PDF_OK = True
-
-except:
-
-    PDF_OK = False
 
 # Database
 
@@ -50,7 +38,7 @@ c.execute('''CREATE TABLE IF NOT EXISTS glossary (english TEXT, lao TEXT, PRIMAR
 
 conn.commit()
 
-# Default glossary
+# Your glossary
 
 default_terms = {
 
@@ -88,31 +76,29 @@ def translate_text(text, direction):
 
     if not text.strip() or not model:
 
-        return text  # Return original if no model
+        return text
 
     glossary = get_glossary()
 
     target = "Lao" if direction == "English → Lao" else "English"
 
-    prompt = f"""Expert Mine Action translator. Use exactly these terms:\n{glossary}\nTranslate to {target}. Return ONLY the translated text (no JSON).\nText: {text}"""
+    prompt = f"""Expert Mine Action translator. Use exactly these terms:\n{glossary}\nTranslate to {target}. Return ONLY the translated text.\nText: {text}"""
 
     try:
 
-        r = model.generate_content(prompt)
+        r = model.generate(prompt)
 
         return r.text.strip()
 
     except Exception as e:
 
-        st.error(f"Translation error: {e}")
-
-        return text
+        return f"Error: {e}"
 
 # UI
 
 st.set_page_config(page_title="Johny", page_icon="🇱🇦", layout="centered")
 
-st.title("Johny - NPA Lao Translator")
+st.title("Johny - NPA Lao Translator (Powered by Grok)")
 
 st.caption("Add to Home screen → real app")
 
@@ -122,111 +108,71 @@ tab1, tab2 = st.tabs(["📄 Translate File", "✍️ Translate Text"])
 
 with tab1:
 
-    uploaded_file = st.file_uploader("Upload DOCX, XLSX, PPTX", type=["docx", "xlsx", "pptx"])
+    uploaded_file = st.file_uploader("Upload DOCX / XLSX / PPTX", type=["docx", "xlsx", "pptx"])
 
-    if uploaded_file is not None:
+    if uploaded_file and st.button("Translate File"):
 
-        file_bytes = uploaded_file.read()
+        with st.spinner("Translating file..."):
 
-        file_name = uploaded_file.name
+            file_bytes = uploaded_file.read()
 
-        ext = file_name.split('.')[-1].lower()
+            file_name = uploaded_file.name
 
-        if st.button("Translate File"):
+            ext = file_name.rsplit(".", 1)[-1].lower()
 
-            with st.spinner("Translating file..."):
+            output = BytesIO()
 
-                output_bytes = BytesIO()
+            if ext == "docx":
 
-                if ext == "docx":
+                doc = Document(BytesIO(file_bytes))
 
-                    doc = Document(BytesIO(file_bytes))
+                for p in doc.paragraphs + [p for t in doc.tables for r in t.rows for c in r.cells for p in c.paragraphs]:
 
-                    # Translate paragraphs
+                    if p.text.strip():
 
-                    for p in doc.paragraphs:
+                        p.text = translate_text(p.text, direction)
 
-                        if p.text.strip():
+                doc.save(output)
 
-                            p.text = translate_text(p.text, direction)
+            elif ext == "xlsx":
 
-                    # Translate tables
+                wb = load_workbook(BytesIO(file_bytes))
 
-                    for table in doc.tables:
+                for ws in wb.worksheets:
 
-                        for row in table.rows:
+                    for row in ws.iter_rows():
 
-                            for cell in row.cells:
+                        for cell in row:
 
-                                for p in cell.paragraphs:
+                            if isinstance(cell.value, str) and cell.value.strip():
 
-                                    if p.text.strip():
+                                cell.value = translate_text(cell.value, direction)
 
-                                        p.text = translate_text(p.text, direction)
+                wb.save(output)
 
-                    doc.save(output_bytes)
+            elif ext == "pptx":
 
-                elif ext == "xlsx":
+                prs = Presentation(BytesIO(file_bytes))
 
-                    wb = load_workbook(BytesIO(file_bytes))
+                for slide in prs.slides:
 
-                    for ws in wb.worksheets:
+                    for shape in slide.shapes:
 
-                        for row in ws.iter_rows():
+                        if shape.has_text_frame:
 
-                            for cell in row:
+                            for p in shape.text_frame.paragraphs:
 
-                                if isinstance(cell.value, str) and cell.value.strip():
+                                if p.text.strip():
 
-                                    cell.value = translate_text(cell.value, direction)
+                                    p.text = translate_text(p.text, direction)
 
-                    wb.save(output_bytes)
+                prs.save(output)
 
-                elif ext == "pptx":
+            output.seek(0)
 
-                    prs = Presentation(BytesIO(file_bytes))
+            st.success("File translated successfully!")
 
-                    for slide in prs.slides:
-
-                        for shape in slide.shapes:
-
-                            if shape.has_text_frame:
-
-                                for p in shape.text_frame.paragraphs:
-
-                                    if p.text.strip():
-
-                                        p.text = translate_text(p.text, direction)
-
-                            if shape.has_table:
-
-                                for row in shape.table.rows:
-
-                                    for cell in row.cells:
-
-                                        for p in cell.text_frame.paragraphs:
-
-                                            if p.text.strip():
-
-                                                p.text = translate_text(p.text, direction)
-
-                    prs.save(output_bytes)
-
-                output_bytes.seek(0)
-
-                st.success("File translated!")
-
-                st.download_button(
-
-                    label="Download Translated File",
-
-                    data=output_bytes,
-
-                    file_name="translated_" + file_name,
-
-                    mime="application/octet-stream"
-
-                )
+            st.download_button("Download Translated File", output, "TRANSLATED_" + file_name)
 
 with tab2:
 
@@ -236,11 +182,7 @@ with tab2:
 
         with st.spinner("Translating..."):
 
-            result = translate_text(text, direction)
-
-            st.success("Translation:")
-
-            st.write(result)
+            st.write(translate_text(text, direction))
 
 # Teach term
 
@@ -252,7 +194,7 @@ with st.expander("Teach Johny a new term"):
 
     with c2: lao = st.text_input("Lao")
 
-    if st.button("Save term"):
+    if st.button("Save"):
 
         if eng and lao:
 
