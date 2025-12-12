@@ -11,3 +11,5 @@ python-pptx
 pdf2docx
  
 openai
+
+openai google-generativeai
