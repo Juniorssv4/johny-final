@@ -10,3 +10,4 @@ python-pptx
 
 pdf2docx
  
+openai
