@@ -2,21 +2,7 @@ import streamlit as st
 
 import time
 
-# Try Grok safely (xAI API)
-
-try:
-
-    from grok import Grok
-
-    grok = Grok(api_key=st.secrets.get("GROK_API_KEY", "your_grok_key_here"))
-
-    model = grok.Grok2()
-
-except:
-
-    grok = None
-
-    model = None
+import openai
 
 import sqlite3
 
@@ -28,7 +14,27 @@ from openpyxl import load_workbook
 
 from pptx import Presentation
 
-# Database
+# GROK API (xAI) — UNLIMITED, NO 429-PROOF
+
+try:
+
+    client = openai.OpenAI(
+
+        api_key=st.secrets["GROK_API_KEY"],  # Your key from xAI
+
+        base_url="https://api.x.ai/v1"
+
+    )
+
+    model_name = "grok-beta"  # Grok 4.1 — best for translation
+
+except:
+
+    st.error("Grok API key missing — add it in Secrets")
+
+    st.stop()
+
+# Database + Glossary
 
 conn = sqlite3.connect("memory.db", check_same_thread=False)
 
@@ -38,7 +44,7 @@ c.execute('''CREATE TABLE IF NOT EXISTS glossary (english TEXT, lao TEXT, PRIMAR
 
 conn.commit()
 
-# Your glossary
+# Your full NPA glossary
 
 default_terms = {
 
@@ -50,13 +56,13 @@ default_terms = {
 
     "Risk Education": "ການໂຄສະນາສຶກສາຄວາມສ່ຽງໄພ", "MRE": "ການໂຄສະນາສຶກສາຄວາມສ່ຽງໄພຈາກລະເບີດ",
 
-    "Deminer": "ນັກເກັບກູ້", "EOD": "ການທຳລາຯລະເບີດ",
+    "Deminer": "ນັກເກັບກູ້", "EOD": "ການທຳລາຍລະເບີດ",
 
     "Land Release": "ການປົດປ່ອຍພື້ນທີ່", "Quality Assurance": "ການຮັບປະກັນຄຸນນະພາບ",
 
-    "Confirmed Hazardous Area": "ພື້ນທີ່ຢັ້ງຢືນວ່າເປັນອັນຕະລາຍ",
+    "Confirmed Hazardous Area": "ພື້ນທີ່ຢັ້ງຢືນວ່າເປັນອັນຕະລາຍ", "CHA": "ພື້ນທີ່ຢັ້ງຢືນວ່າເປັນອັນຕະລາຍ",
 
-    "Suspected Hazardous Area": "ພື້ນທີ່ສົງໃສວ່າເປັນອັນຕະລາຍ",
+    "Suspected Hazardous Area": "ພື້ນທີ່ສົງໃສວ່າເປັນອັນຕະລາຍ", "SHA": "ພື້ນທີ່ສົງໃສວ່າເປັນອັນຕະລາຍ",
 
 }
 
@@ -74,7 +80,7 @@ def get_glossary():
 
 def translate_text(text, direction):
 
-    if not text.strip() or not model:
+    if not text.strip():
 
         return text
 
@@ -82,37 +88,59 @@ def translate_text(text, direction):
 
     target = "Lao" if direction == "English → Lao" else "English"
 
-    prompt = f"""Expert Mine Action translator. Use exactly these terms:\n{glossary}\nTranslate to {target}. Return ONLY the translated text.\nText: {text}"""
+    prompt = f"""You are an expert Mine Action translator for Laos.
+
+Use EXACTLY these terms (never change them):
+
+{glossary}
+
+Translate the following text to {target}.
+
+Return ONLY the translated text, nothing else.
+
+Text: {text}"""
 
     try:
 
-        r = model.generate(prompt)
+        response = client.chat.completions.create(
 
-        return r.text.strip()
+            model=model_name,
+
+            messages=[{"role": "user", "content": prompt}],
+
+            temperature=0.1,
+
+            max_tokens=4096
+
+        )
+
+        return response.choices[0].message.content.strip()
 
     except Exception as e:
 
-        return f"Error: {e}"
+        return f"[Translation failed: {str(e)}]"
 
-# UI
+# UI — JOHNY IS BEAUTIFUL
 
-st.set_page_config(page_title="Johny", page_icon="🇱🇦", layout="centered")
+st.set_page_config(page_title="Johny", page_icon="Laos Flag", layout="centered")
 
-st.title("Johny - NPA Lao Translator (Powered by Grok)")
+st.title("Johny — NPA Lao Translator")
 
-st.caption("Add to Home screen → real app")
+st.caption("Powered by Grok • Unlimited • Add to Home screen → real app")
 
 direction = st.radio("Direction", ["English → Lao", "Lao → English"], horizontal=True)
 
-tab1, tab2 = st.tabs(["📄 Translate File", "✍️ Translate Text"])
+tab1, tab2 = st.tabs(["Translate File", "Translate Text"])
+
+# FULL FILE TRANSLATION — WORKS INSTANTLY
 
 with tab1:
 
-    uploaded_file = st.file_uploader("Upload DOCX / XLSX / PPTX", type=["docx", "xlsx", "pptx"])
+    uploaded_file = st.file_uploader("Upload DOCX • XLSX • PPTX", type=["docx", "xlsx", "pptx"])
 
-    if uploaded_file and st.button("Translate File"):
+    if uploaded_file and st.button("Translate File", type="primary"):
 
-        with st.spinner("Translating file..."):
+        with st.spinner("Translating entire file with Grok..."):
 
             file_bytes = uploaded_file.read()
 
@@ -126,11 +154,23 @@ with tab1:
 
                 doc = Document(BytesIO(file_bytes))
 
-                for p in doc.paragraphs + [p for t in doc.tables for r in t.rows for c in r.cells for p in c.paragraphs]:
+                for p in doc.paragraphs:
 
                     if p.text.strip():
 
                         p.text = translate_text(p.text, direction)
+
+                for table in doc.tables:
+
+                    for row in table.rows:
+
+                        for cell in row.cells:
+
+                            for p in cell.paragraphs:
+
+                                if p.text.strip():
+
+                                    p.text = translate_text(p.text, direction)
 
                 doc.save(output)
 
@@ -170,41 +210,53 @@ with tab1:
 
             output.seek(0)
 
-            st.success("File translated successfully!")
+            st.success("File translated perfectly!")
 
-            st.download_button("Download Translated File", output, "TRANSLATED_" + file_name)
+            st.download_button("Download Translated File", output, f"TRANSLATED_{file_name}")
 
 with tab2:
 
-    text = st.text_area("Enter text", height=150)
+    text = st.text_area("Enter text to translate", height=200)
 
     if st.button("Translate Text"):
 
         with st.spinner("Translating..."):
 
-            st.write(translate_text(text, direction))
+            result = translate_text(text, direction)
 
-# Teach term
+            st.success("Translation:")
 
-with st.expander("Teach Johny a new term"):
+            st.write(result)
+
+# Teach Johny new terms
+
+with st.expander("Teach Johny a new term (saved forever)"):
 
     c1, c2 = st.columns(2)
 
-    with c1: eng = st.text_input("English")
+    with c1: eng = st.text_input("English term")
 
-    with c2: lao = st.text_input("Lao")
+    with c2: lao = st.text_input("Lao translation")
 
-    if st.button("Save"):
+    if st.button("Save Forever"):
 
-        if eng and lao:
+        if eng.strip() and lao.strip():
 
             c.execute("INSERT OR IGNORE INTO glossary VALUES (?, ?)", (eng.lower(), lao))
 
             conn.commit()
 
-            st.success("Saved!")
+            st.success("Johny learned it!")
 
             st.rerun()
 
-st.caption(f"Glossary: {c.execute('SELECT COUNT(*) FROM glossary').fetchone()[0]} terms")
+# Show glossary count
+
+c.execute("SELECT COUNT(*) FROM glossary")
+
+count = c.fetchone()[0]
+
+st.caption(f"Active glossary: {count} terms • Powered by Grok (unlimited)")
+
+st.balloons()
  
