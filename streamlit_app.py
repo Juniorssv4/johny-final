@@ -2,7 +2,7 @@ import streamlit as st
 
 import time
 
-import openai
+import google.generativeai as genai
 
 import sqlite3
 
@@ -14,23 +14,17 @@ from openpyxl import load_workbook
 
 from pptx import Presentation
 
-# GROK API — UNLIMITED, NO 429, INSTANT
+# GEMINI — HIGH ACCURACY FOR LAO
 
 try:
 
-    client = openai.OpenAI(
+    genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
 
-        api_key=st.secrets["GROK_API_KEY"],
-
-        base_url="https://api.x.ai/v1"
-
-    )
-
-    model_name = "grok-3"  # ← Correct model name as of December 2025
+    model = genai.GenerativeModel('gemini-2.5-flash')
 
 except:
 
-    st.error("Grok API key missing — add it in Secrets")
+    st.error("Gemini key missing — add it in Secrets")
 
     st.stop()
 
@@ -48,7 +42,7 @@ conn.commit()
 
 default_terms = {
 
-    "Unexploded Ordnance": "ລະເບີດທີ່ຍັງບໍ່ທັນແຕົກ", "UXO": "ລບຕ",
+    "Unexploded Ordnance": "ລະເບີດທີ່ຍັງບໍ່ທັນແຕກ", "UXO": "ລບຕ",
 
     "Cluster Munition": "ລະເບີດລູກຫວ່ານ", "Bombies": "ບອມບີ",
 
@@ -56,7 +50,7 @@ default_terms = {
 
     "Risk Education": "ການໂຄສະນາສຶກສາຄວາມສ່ຽງໄພ", "MRE": "ການໂຄສະນາສຶກສາຄວາມສ່ຽງໄພຈາກລະເບີດ",
 
-    "Deminer": "ນັກເກັບກູ້", "EOD": "ການທຳລາຍລະເບີດ",
+    "Deminer": "ນັກເກັບກູ້", "EOD": "ການທຳລາຯລະເບີດ",
 
     "Land Release": "ການປົດປ່ອຍພື້ນທີ່", "Quality Assurance": "ການຮັບປະກັນຄຸນນະພາບ",
 
@@ -100,39 +94,41 @@ Return ONLY the translated text, nothing else.
 
 Text: {text}"""
 
-    try:
+    for attempt in range(3):  # Retry up to 3 times on 429
 
-        response = client.chat.completions.create(
+        try:
 
-            model=model_name,
+            response = model.generate_content(prompt)
 
-            messages=[{"role": "user", "content": prompt}],
+            return response.text.strip()
 
-            temperature=0.1,
+        except Exception as e:
 
-            max_tokens=4096
+            if "429" in str(e):
 
-        )
+                st.toast("Rate limit — waiting 40 seconds...")
 
-        return response.choices[0].message.content.strip()
+                time.sleep(40)
 
-    except Exception as e:
+            else:
 
-        return f"[Translation failed: {str(e)}]"
+                time.sleep(5)
 
-# UI — JOHNY IS READY
+    return "[Translation failed — try again]"
+
+# UI
 
 st.set_page_config(page_title="Johny", page_icon="🇱🇦", layout="centered")
 
 st.title("Johny — NPA Lao Translator")
 
-st.caption("Powered by Grok • Unlimited • Add to Home screen = real app")
+st.caption("Powered by Gemini • High accuracy for Lao • Add to Home screen = real app")
 
 direction = st.radio("Direction", ["English → Lao", "Lao → English"], horizontal=True)
 
 tab1, tab2 = st.tabs(["Translate File", "Translate Text"])
 
-# FULL FILE TRANSLATION — WORKS INSTANTLY
+# FILE TRANSLATION WITH RETRY
 
 with tab1:
 
@@ -140,7 +136,7 @@ with tab1:
 
     if uploaded_file and st.button("Translate File", type="primary"):
 
-        with st.spinner("Translating entire file with Grok..."):
+        with st.spinner("Translating entire file..."):
 
             file_bytes = uploaded_file.read()
 
@@ -256,7 +252,7 @@ c.execute("SELECT COUNT(*) FROM glossary")
 
 count = c.fetchone()[0]
 
-st.caption(f"Active glossary: {count} terms • Powered by Grok (unlimited)")
+st.caption(f"Active glossary: {count} terms • Powered by Gemini (Gemini-quality Lao)")
 
 st.balloons()
  
