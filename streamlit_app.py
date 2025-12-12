@@ -4,6 +4,8 @@ import time
 
 import openai
 
+import google.generativeai as genai
+
 import sqlite3
 
 from io import BytesIO
@@ -14,11 +16,13 @@ from openpyxl import load_workbook
 
 from pptx import Presentation
 
-# GROK API — FLUENT LIKE GEMINI (2025 PROMPT ENGINEERING)
+# GROK ROUTES TO GEMINI — UNLIMITED + FLUENT LAO
 
 try:
 
-    client = openai.OpenAI(
+    # Grok for routing (unlimited)
+
+    grok_client = openai.OpenAI(
 
         api_key=st.secrets["GROK_API_KEY"],
 
@@ -26,11 +30,17 @@ try:
 
     )
 
-    model_name = "grok-4-1-fast-non-reasoning"  # Latest multilingual model
+    grok_model = "grok-4-1-fast-non-reasoning"
+
+    # Gemini for translation (fluent)
+
+    genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+
+    gemini_model = genai.GenerativeModel('gemini-2.5-flash')
 
 except:
 
-    st.error("Grok API key missing — add it in Secrets")
+    st.error("API keys missing — add GROK_API_KEY and GEMINI_API_KEY in Secrets")
 
     st.stop()
 
@@ -88,51 +98,81 @@ def translate_text(text, direction):
 
     target = "Lao" if direction == "English → Lao" else "English"
 
-    prompt = f"""You are an expert Mine Action translator for Laos. Translate like Gemini 2.5 Flash: fluent, natural, idiomatic Lao (everyday phrasing, smooth flow, cultural nuance, native speaker style). Avoid literal word-for-word; prioritize readability and context.
+    # Grok pre-processes (unlimited routing)
+
+    grok_prompt = f"""You are a routing assistant. Review this text for Mine Action terms and prepare it for Gemini translation. Ensure glossary terms are preserved. Return ONLY the pre-processed text ready for Gemini.
+
+Text: {text}
+
+Glossary: {glossary}"""
+
+    try:
+
+        grok_response = grok_client.chat.completions.create(
+
+            model=grok_model,
+
+            messages=[{"role": "user", "content": grok_prompt}],
+
+            temperature=0.1
+
+        )
+
+        preprocessed_text = grok_response.choices[0].message.content.strip()
+
+    except:
+
+        preprocessed_text = text  # Fallback
+
+    # Gemini translates (fluent Lao)
+
+    gemini_prompt = f"""You are an expert Mine Action translator for Laos.
 
 Use EXACTLY these terms (never change them):
 
 {glossary}
 
-Translate the following text to {target}.
+Translate the following pre-processed text to {target}.
 
-Return ONLY the translated text, nothing else (no explanations, no JSON, no extra words).
+Make it fluent, natural, idiomatic — like a native speaker.
 
-Text: {text}"""
+Return ONLY the translated text, nothing else.
 
-    try:
+Pre-processed Text: {preprocessed_text}"""
 
-        response = client.chat.completions.create(
+    for attempt in range(3):  # Retry on 429
 
-            model=model_name,
+        try:
 
-            messages=[{"role": "user", "content": prompt}],
+            response = gemini_model.generate_content(gemini_prompt)
 
-            temperature=0.3,  # For Gemini-like creativity/fluency
+            return response.text.strip()
 
-            max_tokens=4096
+        except Exception as e:
 
-        )
+            if "429" in str(e):
 
-        return response.choices[0].message.content.strip()
+                time.sleep(40)
 
-    except Exception as e:
+            else:
 
-        return f"[Translation failed: {str(e)}]"
+                time.sleep(5)
 
-# UI — JOHNY IS READY
+    return "[Translation failed — try again]"
+
+# UI
 
 st.set_page_config(page_title="Johny", page_icon="🇱🇦", layout="centered")
 
 st.title("Johny — NPA Lao Translator")
 
-st.caption("Powered by Grok • Unlimited • Add to Home screen = real app")
+st.caption("Grok + Gemini Hybrid • Unlimited + Fluent • Add to Home screen = real app")
 
 direction = st.radio("Direction", ["English → Lao", "Lao → English"], horizontal=True)
 
 tab1, tab2 = st.tabs(["Translate File", "Translate Text"])
 
-# FULL FILE TRANSLATION — INSTANT & FLUENT
+# FILE TRANSLATION — GROK ROUTES, GEMINI TRANSLATES
 
 with tab1:
 
@@ -140,7 +180,7 @@ with tab1:
 
     if uploaded_file and st.button("Translate File", type="primary"):
 
-        with st.spinner("Translating entire file with Grok..."):
+        with st.spinner("Grok routing + Gemini translating..."):
 
             file_bytes = uploaded_file.read()
 
@@ -220,7 +260,7 @@ with tab2:
 
     if st.button("Translate Text"):
 
-        with st.spinner("Translating..."):
+        with st.spinner("Grok + Gemini translating..."):
 
             result = translate_text(text, direction)
 
@@ -256,7 +296,7 @@ c.execute("SELECT COUNT(*) FROM glossary")
 
 count = c.fetchone()[0]
 
-st.caption(f"Active glossary: {count} terms • Powered by Grok (Gemini-fluent)")
+st.caption(f"Active glossary: {count} terms • Grok + Gemini Hybrid")
 
 st.balloons()
  
