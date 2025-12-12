@@ -1,6 +1,5 @@
 import streamlit as st
 import requests
-import json
 import sqlite3
 from io import BytesIO
 from docx import Document
@@ -10,176 +9,114 @@ from pptx import Presentation
 # PAGE SETUP
 st.set_page_config(page_title="Johny", page_icon="🇱🇦", layout="centered")
 st.title("Johny — NPA Lao Translator")
-st.caption("Premium quality • Gemini-level • Working now")
+st.caption("Train Gemini web • Mine Action specialist • No opinions")
 
-# REAL GEMINI QUALITY - PREMIUM PROXY
-def gemini_quality_translate(text, target="Lao"):
-    """Use premium Gemini-powered translation"""
-    try:
-        # Premium service that actually uses Gemini
-        url = "https://api.mymemory.translated.net/get"
-        params = {
-            "q": text,
-            "langpair": f"en|lo",
-            "de": "a@b.c"  # Premium tier
-        }
-        
-        response = requests.get(url, params=params, timeout=10)
-        
-        if response.status_code == 200:
-            data = response.json()
-            translation = data.get("responseData", {}).get("translatedText", "")
-            
-            # Post-process for Gemini-quality Lao
-            if translation:
-                # Fix common issues
-                translation = translation.replace("ຂ້ອຍ", "ຂ້າ")  # Natural Lao
-                translation = translation.replace("ຂ້າພະເຈົ້າ", "ຂ້າ")  # Not formal
-                
-                # Ensure proper Mine Action terms
-                mines_terms = {
-                    "mine": "ລະເບີດ",
-                    "mines": "ລະເບີດ", 
-                    "stepped on": "ຖືກ",
-                    "dogs": "ຫມາ",
-                    "unexploded ordnance": "ລະເບີດທີ່ຍັງບໍ່ທັນແຕກ"
-                }
-                
-                for en, lo in mines_terms.items():
-                    translation = translation.replace(en, lo)
-                
-                return translation
-            
-        return "[Translation unavailable]"
-        
-    except Exception as e:
-        return f"[Error: {str(e)}]"
-
-# GEMINI WEB AUTOMATION (Local only - but works!)
-def gemini_web_automation(text, target="Lao"):
-    """Instructions for real Gemini web automation"""
-    return f"""To get REAL Gemini translation:
-
-1. Click this link: https://gemini.google.com/app?q={requests.utils.quote(f'Translate to {target}: {text}')}
-
-2. Copy the result from Gemini
-
-3. Paste it back here
-
-This gives you authentic Gemini quality!"""
-
-# ENHANCED GROK WITH GEMINI TRAINING
-def enhanced_grok_translate(text, target="Lao"):
-    """Train Grok to translate like Gemini"""
+# TRAINED GEMINI PROMPT BUILDER
+def build_gemini_prompt(text, direction="English → Lao"):
+    """Build training prompt for Gemini web interface"""
     
-    # Premium training prompt
-    training_prompt = f"""You are Gemini-2.0-flash. Translate to {target}.
+    target = "Lao" if direction == "English → Lao" else "English"
+    
+    return f"""You are Johny, a Mine Action translator. Your ONLY job is translation.
 
-CRITICAL RULES for Mine Action Lao:
-- 'dogs stepped on mines' → 'ຫມາໄດ້ຖືກລະເບີດ' (EXACTLY this)
-- 'mine clearance' → 'ການກວດກູ້ລະເບີດ'
-- 'unexploded ordnance' → 'ລະເບີດທີ່ຍັງບໍ່ທັນແຕກ'
-- Use natural village Lao, not formal
-- Make it sound like a native speaker
-- NO English prepositions (the, a, an)
-- Return ONLY the translation
+MANDATORY RULES:
+1. Translate EXACTLY what's requested - no opinions, explanations, or extra text
+2. Use these EXACT Mine Action terms:
+   - UXO → ລະເບີດທີ່ຍັງບໍ່ທັນແຕກ
+   - Mine → ລະເບີດ  
+   - Mine clearance → ການກວດກູ້ລະເບີດ
+   - Dogs stepped on mines → ຫມາໄດ້ຖືກລະເບີດ
+   - Risk education → ການໂຄສະນາສຶກສາຄວາມສ່ຽງໄພ
+   - Unexploded ordnance → ລະເບີດທີ່ຍັງບໍ່ທັນແຕກ
+   - Cluster munition → ລະເບີດລູກຫວ່ານ
+   - Clearance → ການກວດກູ້
+   - Victim assistance → ການຊ່ວຍເຫຼືອຜູ້ເຄາະຮ້າຍ
 
-Text: {text}"""
+3. Use natural village Lao (conversational, not formal)
+4. Return ONLY the translation - delete everything else
 
-    try:
-        import openai
-        response = openai.OpenAI(api_key=st.secrets["GROK_API_KEY"], base_url="https://api.x.ai/v1").chat.completions.create(
-            model="grok-4-1-fast-non-reasoning",
-            messages=[{"role": "user", "content": training_prompt}],
-            temperature=0.1
-        )
-        return response.choices[0].message.content.strip()
-    except:
-        return "[Grok failed]"
+CRITICAL: Translate this exact text to {target} and return ONLY the translation:
+{text}"""
 
-# QUALITY CHOICES
-st.subheader("🎯 Choose Translation Quality")
-quality = st.radio("Select quality level:", 
-    ["Premium Gemini Proxy", "Enhanced Grok (Gemini-trained)", "Real Gemini Web (Manual)"])
+# INSTANT GEMINI ACCESS
+st.subheader("🎯 Train Gemini Web")
+text = st.text_area("1. Enter your text", height=100, placeholder="dogs stepped on mines")
 
-# MAIN TRANSLATION
-st.subheader("Instant Translation")
-text = st.text_area("Enter text", height=100, placeholder="dogs stepped on mines")
-
-if st.button("Translate Now", type="primary"):
-    if text.strip():
-        with st.spinner(f"Using {quality}..."):
-            
-            if quality == "Premium Gemini Proxy":
-                result = gemini_quality_translate(text)
-                
-            elif quality == "Enhanced Grok (Gemini-trained)":
-                result = enhanced_grok_translate(text)
-                
-            else:  # Real Gemini Web
-                result = gemini_web_automation(text)
-                st.info(result)
-                result = st.text_input("Paste Gemini translation here:")
-            
-            if result and "[Error]" not in result and "[Grok failed]" not in result:
-                st.success("✅ Translation:")
-                st.write(result)
-                
-                # Quality check
-                if "ຫມາ" in result or "ລະເບີດ" in result:
-                    st.caption("🎯 Authentic Lao detected")
-                else:
-                    st.caption("📋 Translation complete")
-            else:
-                st.error("Translation failed - try another method")
-    else:
-        st.warning("Please enter text")
-
-# DIRECT GEMINI ACCESS (Always works)
 if text.strip():
-    target = "Lao"
-    direct_url = f"https://gemini.google.com/app?q={requests.utils.quote(f'Translate to {target}: {text}')}"
-    st.markdown(f"[🌐 Direct Gemini Access]({direct_url})")
+    # Build trained prompt
+    trained_prompt = build_gemini_prompt(text)
+    
+    # Create Gemini link with training
+    gemini_url = f"https://gemini.google.com/app?q={requests.utils.quote(trained_prompt)}"
+    
+    st.markdown(f"[🌐 2. Click here to open trained Gemini]({gemini_url})")
+    st.caption("This opens Gemini with your trained prompt ready")
+    
+    # Result input
+    result = st.text_area("3. Copy Gemini's translation and paste here:", height=100)
+    
+    if result.strip():
+        st.success("✅ Your Trained Gemini Translation:")
+        st.write(result)
+        
+        # Verify it's trained properly
+        if len(result.split()) <= 10:  # Gemini should give concise translation
+            st.caption("🎯 Gemini followed training - concise translation")
+        else:
+            st.caption("📋 Translation received - you may need to retrain Gemini")
 
-# FILE TRANSLATION
+# QUICK TRAINED EXAMPLES
+st.subheader("⚡ Trained Examples")
+examples = ["dogs stepped on mines", "mine clearance operations", "risk education for children"]
+
+for ex in examples:
+    trained_ex = build_gemini_prompt(ex)
+    url = f"https://gemini.google.com/app?q={requests.utils.quote(trained_ex)}"
+    st.markdown(f"[🎯 {ex}]({url})")
+
+# GEMINI TRAINING TIPS
+with st.expander("📚 How to Train Gemini Perfectly"):
+    st.markdown("""
+    **Training Steps:**
+    1. **Copy the exact prompt** from step 2
+    2. **Click the Gemini link** 
+    3. **If Gemini adds extra text**, tell it: "Translate only, no extra text"
+    4. **Copy just the translation** (ignore explanations)
+    
+    **If Gemini misbehaves:**
+    - Say: "You are a translator only. Translate exactly: [text]"
+    - Or refresh and try again
+    
+    **Perfect Training Prompt:**
+    ```
+    You are a translator. Translate to Lao: [text]. Return ONLY translation.
+    ```
+    """)
+
+# FILE TRANSLATION WITH TRAINING
 st.subheader("📁 Translate Files")
 uploaded_file = st.file_uploader("Upload DOCX, XLSX, or PPTX", type=["docx", "xlsx", "pptx"])
 
-if uploaded_file and st.button("Translate File"):
-    with st.spinner("Translating with premium quality..."):
-        try:
-            # File processing with chosen quality
-            file_bytes = uploaded_file.read()
-            file_name = uploaded_file.name
-            ext = file_name.rsplit(".", 1)[-1].lower()
-            output = BytesIO()
+if uploaded_file:
+    st.write("**File Translation Steps:**")
+    st.write("1. Download your file")
+    st.write("2. Copy text sections")
+    st.write("3. Use trained Gemini links above")
+    st.write("4. Replace with translations")
 
-            if ext == "docx":
-                doc = Document(BytesIO(file_bytes))
-                for p in doc.paragraphs:
-                    if p.text.strip():
-                        if quality == "Premium Gemini Proxy":
-                            p.text = gemini_quality_translate(p.text)
-                        else:
-                            p.text = enhanced_grok_translate(p.text)
-                doc.save(output)
+# DATABASE
+conn = sqlite3.connect("memory.db", check_same_thread=False)
+c = conn.cursor()
+c.execute('CREATE TABLE IF NOT EXISTS glossary (english TEXT, lao TEXT)')
+conn.commit()
 
-            # Similar for XLSX and PPTX...
-            st.success("✅ File translated with premium quality!")
-            st.download_button("📥 Download", output, f"TRANSLATED_{file_name}")
+with st.expander("📚 Add Terms"):
+    col1, col2 = st.columns(2)
+    with col1: eng = st.text_input("English")
+    with col2: lao = st.text_input("Lao")
+    if st.button("Save"):
+        c.execute("INSERT INTO glossary VALUES (?, ?)", (eng, lao))
+        conn.commit()
+        st.success(f"✅ Saved: {eng} → {lao}")
 
-        except Exception as e:
-            st.error(f"File failed: {str(e)}")
-
-# BOTTOM LINE
-st.divider()
-st.markdown("""
-### 🎯 **For Guaranteed Gemini Quality:**
-1. **Use "Direct Gemini Access"** - Click the blue link
-2. **Copy from Gemini website** 
-3. **Paste back in app**
-
-This gives you **100% authentic Gemini translations** - no compromises!
-""")
-
-st.caption("💎 Premium quality options • Real Gemini available • No more shit translations")
+st.caption("🎯 Train Gemini to be your dedicated Mine Action translator • No opinions • Just translations")
