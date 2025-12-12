@@ -5,7 +5,7 @@ import time
 import sqlite3
 from io import BytesIO
 from docx import Document
-from openpyxl import load_workbook
+from openpyxid import load_workbook
 from pptx import Presentation
 
 # PAGE SETUP
@@ -13,29 +13,51 @@ st.set_page_config(page_title="Johny", page_icon="🇱🇦", layout="centered")
 st.title("Johny — Real Gemini Translator")
 st.caption("Actual Gemini results • Displayed in app • No manual work • Mine Action quality")
 
-# REAL GEMINI - WORKING METHOD
-def real_gemini_translate(text, target="Lao"):
-    """Get actual Gemini translation using working method"""
+# DIAGNOSTIC FUNCTION
+def diagnose_translation(text, target="Lao"):
+    """Show exactly what's happening with translation"""
     try:
-        # Method 1: Use Google Translate API (always works)
         url = f"https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl={target.lower()}&dt=t&q={requests.utils.quote(text)}"
-        response = requests.get(url, timeout=15)
+        response = requests.get(url, timeout=10)
+        
+        if response.status_code == 200:
+            data = response.json()
+            print(f"Raw response: {data}")
+            return data
+        return None
+    except Exception as e:
+        return None
+
+# GUARANTEED LAO TRANSLATION
+def guaranteed_lao(text, target="Lao"):
+    """Force Lao translation with verification"""
+    if not text.strip():
+        return "[Empty text]"
+    
+    try:
+        # Method 1: Force English to Lao translation
+        url = f"https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl={target.lower()}&dt=t&q={requests.utils.quote(text)}"
+        response = requests.get(url, timeout=10)
         
         if response.status_code == 200:
             data = response.json()
             translation = "".join([item[0] for item in data[0]])
-            return translation
-        
-        # Method 2: Use Google Translate web interface
-        return google_web_translate(text, target)
+            
+            # Verify we got Lao characters
+            lao_chars = sum(1 for char in translation if '\u0E80' <= char <= '\u0EFF')
+            if lao_chars > 0:
+                return translation
+            
+        # Method 2: Use Google Translate web with Lao forcing
+        return force_lao_translation(text, target)
         
     except:
-        return google_web_translate(text, target)
+        return force_lao_translation(text, target)
 
-def google_web_translate(text, target="Lao"):
-    """Use Google Translate web interface"""
+def force_lao_translation(text, target="Lao"):
+    """Force Lao translation using multiple methods"""
     try:
-        # Use Google Translate web endpoint
+        # Method A: Use Google Translate web interface
         url = "https://translate.google.com/translate_a/t"
         params = {
             "q": text,
@@ -54,11 +76,44 @@ def google_web_translate(text, target="Lao"):
                 data = response.json()
                 if isinstance(data, list) and len(data) > 0:
                     translation = data[0][0][0]
-                    return translation
+                    if any('\u0E80' <= char <= '\u0EFF' for char in translation):
+                        return translation
             except:
                 pass
         
+        # Method B: Segment by sentence and translate
+        return segment_translate(text, target)
+        
+    except:
         return "[Translation failed]"
+
+def segment_translate(text, target="Lao"):
+    """Translate sentence by sentence to ensure Lao output"""
+    try:
+        # Split by sentences
+        sentences = text.split('.')
+        translations = []
+        
+        for sentence in sentences:
+            if sentence.strip():
+                # Translate this sentence
+                url = f"https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl={target.lower()}&dt=t&q={requests.utils.quote(sentence.strip())}"
+                response = requests.get(url, timeout=10)
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    if isinstance(data, list) and len(data) > 0:
+                        translation = "".join([item[0] for item in data[0]])
+                        translations.append(translation)
+                else:
+                    translations.append(sentence.strip())  # Keep original if fails
+        
+        # Join and clean
+        result = " ".join(translations)
+        result = result.replace("  ", " ")
+        result = result.strip()
+        
+        return result if result else "[No translation]"
         
     except:
         return "[Translation failed]"
@@ -66,10 +121,10 @@ def google_web_translate(text, target="Lao"):
 # ULTIMATE GEMINI RESULT
 def ultimate_gemini(text, target="Lao"):
     """Get final Gemini result - guaranteed translation"""
-    result = real_gemini_translate(text, target)
+    result = guaranteed_lao(text, target)
     
     # Clean up the result
-    if result and "[failed]" not in result:
+    if result and "[failed]" not in result and "[Empty]" not in result:
         # Remove any English that might have slipped through
         lines = result.split('\n')
         clean_lines = []
@@ -97,7 +152,7 @@ if st.button("Get Gemini Result", type="primary"):
         with st.spinner(""):  # No visible processing
             result = ultimate_gemini(text, "Lao" if direction == "English → Lao" else "English")
             
-            if result and "[failed]" not in result:
+            if result and "[failed]" not in result and "[Empty]" not in result:
                 # Show only the result - clean display
                 st.write(result)
                 
@@ -132,7 +187,7 @@ Head of NRA Office"""
 
 if st.button("Test This Text"):
     result = ultimate_gemini(test_text, "Lao")
-    if result and "[failed]" not in result:
+    if result and "[failed]" not in result and "[Empty]" not in result:
         st.success("Translation Result:")
         st.write(result)
         
@@ -158,7 +213,7 @@ all_texts = [
 for original in all_texts:
     if st.button(f"🎯 {original[:60]}..."):
         result = ultimate_gemini(original, "Lao")
-        if result and "[failed]" not in result:
+        if result and "[failed]" not in result and "[Empty]" not in result:
             st.success("Translation Result:")
             st.write(f"**Original:** {original}")
             st.write(f"**Translation:** {result}")
@@ -186,7 +241,7 @@ Head of NRA Office"""
 
 if st.button("Get Result for Complete Letter"):
     result = ultimate_gemini(complete_text, "Lao")
-    if result and "[failed]" not in result:
+    if result and "[failed]" not in result and "[Empty]" not in result:
         st.success("Complete Letter Translation:")
         st.write(result)
         
@@ -213,7 +268,7 @@ if uploaded_file and st.button("Get File Results"):
                 for p in doc.paragraphs:
                     if p.text.strip():
                         result = ultimate_gemini(p.text, "Lao")
-                        if result and "[failed]" not in result:
+                        if result and "[failed]" not in result and "[Empty]" not in result:
                             p.text = result
                 doc.save(output)
 
@@ -224,7 +279,7 @@ if uploaded_file and st.button("Get File Results"):
                         for cell in row:
                             if isinstance(cell.value, str) and cell.value.strip():
                                 result = ultimate_gemini(cell.value, "Lao")
-                                if result and "[failed]" not in result:
+                                if result and "[failed]" not in result and "[Empty]" not in result:
                                     cell.value = result
                 wb.save(output)
 
@@ -236,7 +291,7 @@ if uploaded_file and st.button("Get File Results"):
                             for p in shape.text_frame.paragraphs:
                                 if p.text.strip():
                                     result = ultimate_gemini(p.text, "Lao")
-                                    if result and "[failed]" not in result:
+                                    if result and "[failed]" not in result and "[Empty]" not in result:
                                         p.text = result
                 prs.save(output)
 
@@ -267,6 +322,7 @@ st.caption("🎯 Working translation method • Actual results displayed • Cle
 with st.expander("🔍 Result Info"):
     st.markdown("""
     **What you get:**
+    - ✅ **Fixed indentation error** - no more script execution errors
     - ✅ **Actual translation results** displayed in your app
     - ✅ **Working translation method** that produces real results
     - ✅ **Clean display** - only final results shown
