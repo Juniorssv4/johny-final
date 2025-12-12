@@ -14,19 +14,19 @@ from openpyxl import load_workbook
 
 from pptx import Presentation
 
-# GROK API (xAI) — UNLIMITED, NO 429-PROOF
+# GROK API — UNLIMITED, NO 429, INSTANT
 
 try:
 
     client = openai.OpenAI(
 
-        api_key=st.secrets["GROK_API_KEY"],  # Your key from xAI
+        api_key=st.secrets["GROK_API_KEY"],
 
         base_url="https://api.x.ai/v1"
 
     )
 
-    model_name = "grok-beta"  # Grok 4.1 — best for translation
+    model_name = "grok-3"  # ← Correct model name as of December 2025
 
 except:
 
@@ -48,7 +48,7 @@ conn.commit()
 
 default_terms = {
 
-    "Unexploded Ordnance": "ລະເບີດທີ່ຍັງບໍ່ທັນແຕກ", "UXO": "ລບຕ",
+    "Unexploded Ordnance": "ລະເບີດທີ່ຍັງບໍ່ທັນແຕົກ", "UXO": "ລບຕ",
 
     "Cluster Munition": "ລະເບີດລູກຫວ່ານ", "Bombies": "ບອມບີ",
 
@@ -120,13 +120,13 @@ Text: {text}"""
 
         return f"[Translation failed: {str(e)}]"
 
-# UI — JOHNY IS BEAUTIFUL
+# UI — JOHNY IS READY
 
-st.set_page_config(page_title="Johny", page_icon="Laos Flag", layout="centered")
+st.set_page_config(page_title="Johny", page_icon="🇱🇦", layout="centered")
 
 st.title("Johny — NPA Lao Translator")
 
-st.caption("Powered by Grok • Unlimited • Add to Home screen → real app")
+st.caption("Powered by Grok • Unlimited • Add to Home screen = real app")
 
 direction = st.radio("Direction", ["English → Lao", "Lao → English"], horizontal=True)
 
@@ -228,17 +228,17 @@ with tab2:
 
             st.write(result)
 
-# Teach Johny new terms
+# Teach new term
 
 with st.expander("Teach Johny a new term (saved forever)"):
 
     c1, c2 = st.columns(2)
 
-    with c1: eng = st.text_input("English term")
+    with c1: eng = st.text_input("English")
 
-    with c2: lao = st.text_input("Lao translation")
+    with c2: lao = st.text_input("Lao")
 
-    if st.button("Save Forever"):
+    if st.button("Save"):
 
         if eng.strip() and lao.strip():
 
@@ -250,7 +250,7 @@ with st.expander("Teach Johny a new term (saved forever)"):
 
             st.rerun()
 
-# Show glossary count
+# Stats
 
 c.execute("SELECT COUNT(*) FROM glossary")
 
