@@ -142,3 +142,98 @@ text = st.text_area("Enter text", height=100, placeholder="dogs stepped on mines
 if st.button("Translate with Gemini", type="primary"):
     if text.strip():
         with st.spinner("Connecting to Gemini API..."):
+            result = ultimate_gemini_translate(text, "Lao" if direction == "English → Lao" else "English")
+            
+            if result and "[Error]" not in result and "[failed]" not in result:
+                st.success("✅ Gemini Translation:")
+                st.write(result)
+                
+                # Verify quality
+                if any('\u0E80' <= char <= '\u0EFF' for char in result):
+                    st.caption("🎯 Authentic Lao from Gemini • Mine Action quality")
+                else:
+                    st.caption("📋 Gemini translation complete")
+            else:
+                st.error(f"Gemini translation failed: {result}")
+    else:
+        st.warning("Please enter text")
+
+# QUICK EXAMPLES
+st.subheader("⚡ Quick Examples")
+examples = ["dogs stepped on mines", "mine clearance operations", "risk education for children"]
+
+for ex in examples:
+    col1, col2 = st.columns([3, 1])
+    with col1:
+        if st.button(f"🎯 {ex}"):
+            result = ultimate_gemini_translate(ex, "Lao")
+            if result and "[Error]" not in result:
+                st.success(f"**{ex}** → **{result}**")
+
+# FILE TRANSLATION
+st.subheader("📁 Translate Files")
+uploaded_file = st.file_uploader("Upload DOCX, XLSX, or PPTX", type=["docx", "xlsx", "pptx"])
+
+if uploaded_file and st.button("Translate File"):
+    with st.spinner("Translating file with Gemini quality..."):
+        try:
+            file_bytes = uploaded_file.read()
+            file_name = uploaded_file.name
+            ext = file_name.rsplit(".", 1)[-1].lower()
+            output = BytesIO()
+
+            if ext == "docx":
+                doc = Document(BytesIO(file_bytes))
+                for p in doc.paragraphs:
+                    if p.text.strip():
+                        translated = ultimate_gemini_translate(p.text, "Lao")
+                        if translated and "[Error]" not in translated:
+                            p.text = translated
+                doc.save(output)
+
+            elif ext == "xlsx":
+                wb = load_workbook(BytesIO(file_bytes))
+                for ws in wb.worksheets:
+                    for row in ws.iter_rows():
+                        for cell in row:
+                            if isinstance(cell.value, str) and cell.value.strip():
+                                translated = ultimate_gemini_translate(cell.value, "Lao")
+                                if translated and "[Error]" not in translated:
+                                    cell.value = translated
+                wb.save(output)
+
+            elif ext == "pptx":
+                prs = Presentation(BytesIO(file_bytes))
+                for slide in prs.slides:
+                    for shape in slide.shapes:
+                        if shape.has_text_frame:
+                            for p in shape.text_frame.paragraphs:
+                                if p.text.strip():
+                                    translated = ultimate_gemini_translate(p.text, "Lao")
+                                    if translated and "[Error]" not in translated:
+                                        p.text = translated
+                prs.save(output)
+
+            output.seek(0)
+            st.success("✅ File translated with Gemini quality!")
+            st.download_button("📥 Download", output, f"TRANSLATED_{file_name}")
+
+        except Exception as e:
+            st.error(f"File translation failed: {str(e)}")
+
+# DATABASE
+conn = sqlite3.connect("memory.db", check_same_thread=False)
+c = conn.cursor()
+c.execute('CREATE TABLE IF NOT EXISTS glossary (english TEXT, lao TEXT)')
+conn.commit()
+
+with st.expander("📚 Add Translation Terms"):
+    col1, col2 = st.columns(2)
+    with col1: eng = st.text_input("English term")
+    with col2: lao = st.text_input("Lao term")
+    if st.button("Save Term"):
+        c.execute("INSERT INTO glossary VALUES (?, ?)", (eng, lao))
+        conn.commit()
+        st.success(f"✅ Saved: {eng} → {lao}")
+
+st.caption("🤖 Gemini API proxy • Real Gemini quality • Direct in-app results • Mine Action specialist")
