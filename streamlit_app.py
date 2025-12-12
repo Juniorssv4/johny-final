@@ -1,40 +1,30 @@
 import streamlit as st
 
-# --- Try to import Gemini (works on your PC, safe fallback on Streamlit Cloud) ---
+# Try to import Gemini (safe on Streamlit Cloud)
 
 try:
 
     import google.generativeai as genai
 
-except ImportError:
+    genai.configure(api_key=st.secrets.get("GEMINI_API_KEY", "AIzaSyCNR-ebGbGVV_mdlSLJPBtB-iwGOE0cDwo"))
+
+    model = genai.GenerativeModel('gemini-2.5-flash')
+
+except:
 
     genai = None
 
-    st.error("Gemini not available on this server — contact admin to install google-generativeai package")
+    model = None
 
 import sqlite3
 
 import json
-
-import os
 
 from docx import Document
 
 from openpyxl import load_workbook
 
 from pptx import Presentation
-
-# Gemini key (will use Secrets if available, otherwise your key)
-
-if genai:
-
-    api_key = st.secrets.get("GEMINI_API_KEY", "AIzaSyCNR-ebGbGVV_mdlSLJPBtB-iwGOE0cDwo")
-
-    genai.configure(api_key=api_key)
-
-    model = genai.GenerativeModel('gemini-2.5-flash')
-
-# Database
 
 conn = sqlite3.connect("memory.db", check_same_thread=False)
 
@@ -43,8 +33,6 @@ c = conn.cursor()
 c.execute('''CREATE TABLE IF NOT EXISTS glossary (english TEXT, lao TEXT, PRIMARY KEY(english, lao))''')
 
 conn.commit()
-
-# Default terms
 
 default_terms = {
 
@@ -56,9 +44,9 @@ default_terms = {
 
     "Risk Education": "ການໂຄສະນາສຶກສາຄວາມສ່ຽງໄພ", "MRE": "ການໂຄສະນາສຶກສາຄວາມສ່ຽງໄພຈາກລະເບີດ",
 
-    "Deminer": "ນັກເກັບກູ້", "EOD": "ການທຳລາຍລະເບີດ",
+    "Deminer": "ນັກເກັບກູ້", "EOD": "ການທທຳລາຍລະເບີດ",
 
-    "Land Release": "ການປົດປ່ອຍພື້ນທີ່", "Quality Assurance": "ການຮັບປະກັນຄຸນນະພາບ",
+    "Land Release": "ການປົດປ່ອຍພື້ນທີ່", "Quality Assurance": "ການຮັບບປະກັນຄຸນນະພາບ",
 
     "Confirmed Hazardous Area": "ພື້ນທີ່ຢັ້ງຢືນວ່າເປັນອັນຕະລາຍ",
 
@@ -80,9 +68,9 @@ def get_glossary():
 
 def translate(text, direction):
 
-    if not text.strip() or not genai:
+    if not text.strip() or not model:
 
-        return "Translation unavailable"
+        return "Translation not available"
 
     glossary = get_glossary()
 
@@ -94,29 +82,27 @@ def translate(text, direction):
 
         r = model.generate_content(prompt)
 
-        cleaned = r.text.strip().replace("```json", "").replace("```", "")
+        cleaned = r.text.strip().replace("```json","").replace("```","").strip()
 
         return json.loads(cleaned)["translation"]
 
-    except Exception as e:
+    except:
 
-        return f"Error: {e}"
-
-# UI
+        return "Translation failed"
 
 st.set_page_config(page_title="Johny", page_icon="Laos Flag", layout="centered")
 
 st.title("Johny - NPA Lao Translator")
 
-st.caption("Add to Home screen for real app experience")
+st.caption("Add to Home screen → real app")
 
 direction = st.radio("Direction", ["English → Lao", "Lao → English"], horizontal=True)
 
-tab1, tab2 = st.tabs(["Translate File", "Translate Text"])
+tab1, tab2 = st.tabs(["File", "Text"])
 
 with tab1:
 
-    st.info("File upload coming soon — works perfectly on local version")
+    st.info("File upload works locally — contact admin for cloud version")
 
 with tab2:
 
@@ -124,15 +110,13 @@ with tab2:
 
     if st.button("Translate"):
 
-        with st.spinner("Thinking..."):
+        with st.spinner("Translating..."):
 
             result = translate(text, direction)
 
             st.success("Translation:")
 
             st.write(result)
-
-# Teach term
 
 with st.expander("Teach Johny a new term"):
 
@@ -142,7 +126,7 @@ with st.expander("Teach Johny a new term"):
 
     with c2: lao = st.text_input("Lao")
 
-    if st.button("Save"):
+    if st.button("Save term"):
 
         if eng and lao:
 
@@ -150,10 +134,10 @@ with st.expander("Teach Johny a new term"):
 
             conn.commit()
 
-            st.success("Learned!")
+            st.success("Saved!")
 
             st.rerun()
 
-st.caption(f"Glossary has {c.execute('SELECT COUNT(*) FROM glossary').fetchone()[0]} terms")
+st.caption(f"Glossary: {c.execute('SELECT COUNT(*) FROM glossary').fetchone()[0]} terms")
 For Sale Page
  
