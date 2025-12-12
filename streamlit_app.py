@@ -139,5 +139,5 @@ with st.expander("Teach Johny a new term"):
             st.rerun()
 
 st.caption(f"Glossary: {c.execute('SELECT COUNT(*) FROM glossary').fetchone()[0]} terms")
-For Sale Page
+
  
