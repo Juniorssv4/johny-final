@@ -13,16 +13,14 @@ st.set_page_config(page_title="Johny", page_icon="🇱🇦", layout="centered")
 st.title("Johny — NPA Lao Translator")
 st.caption("Grok + Gemini Hybrid • Unlimited + Fluent")
 
-# API SETUP WITH YOUR KEYS
+# API SETUP
 try:
-    # Grok for routing (unlimited)
     grok_client = openai.OpenAI(
         api_key=st.secrets["GROK_API_KEY"],
         base_url="https://api.x.ai/v1"
     )
     grok_model = "grok-4-1-fast-non-reasoning"
     
-    # Gemini for translation
     genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
     gemini_model = genai.GenerativeModel('gemini-2.0-flash')
     
@@ -32,14 +30,14 @@ except Exception as e:
     st.error(f"❌ API connection failed: {str(e)}")
     st.stop()
 
-# DATABASE SETUP
+# DATABASE
 conn = sqlite3.connect("memory.db", check_same_thread=False)
 c = conn.cursor()
 c.execute('''CREATE TABLE IF NOT EXISTS glossary 
              (english TEXT, lao TEXT, PRIMARY KEY(english, lao))''')
 conn.commit()
 
-# DEFAULT GLOSSARY
+# DEFAULT TERMS
 default_terms = {
     "Unexploded Ordnance": "ລະເບີດທີ່ຍັງບໍ່ທັນແຕກ", "UXO": "ລບຕ",
     "Cluster Munition": "ລະເບີດລູກຫວ່ານ", "Bombies": "ບອມບີ",
@@ -53,13 +51,6 @@ for eng, lao in default_terms.items():
     c.execute("INSERT OR IGNORE INTO glossary VALUES (?, ?)", (eng.lower(), lao))
 conn.commit()
 
-def get_glossary():
-    c.execute("SELECT english, lao FROM glossary")
-    terms = c.fetchall()
-    if terms:
-        return "\n".join([f"• {e.capitalize()} → {l}" for e, l in terms])
-    return "No terms yet."
-
 def translate_text(text, direction):
     if not text.strip():
         return text
@@ -69,7 +60,7 @@ def translate_text(text, direction):
         target = "Lao" if direction == "English → Lao" else "English"
         
         # GROK PRE-PROCESSING
-        grok_prompt = f"""You are a routing assistant. Review this text for Mine Action terms and prepare it for Gemini translation. Ensure glossary terms are preserved. Return ONLY the pre-processed text ready for Gemini.
+        grok_prompt = f"""Review this text for Mine Action terms and prepare it for Gemini translation. Preserve glossary terms. Return ONLY the pre-processed text.
 
 Text: {text}
 
@@ -84,38 +75,105 @@ Glossary: {glossary}"""
         
         # GEMINI TRANSLATION
         gemini_prompt = f"""You are an expert Mine Action translator for Laos.
-Use EXACTLY these terms (never change them):
-{glossary}
+Use EXACTLY these terms: {glossary}
 
-Translate the following pre-processed text to {target}.
-Make it fluent, natural, idiomatic — like a native speaker.
-Return ONLY the translated text, nothing else.
+Translate to {target}. Return ONLY the translation.
 
-Pre-processed Text: {preprocessed_text}"""
+Text: {preprocessed_text}"""
 
-        for attempt in range(3):
-            try:
-                response = gemini_model.generate_content(gemini_prompt)
-                return response.text.strip()
-            except Exception as e:
-                if "429" in str(e) and attempt < 2:
-                    time.sleep(40)
-                else:
-                    time.sleep(5)
-        
-        return "[Translation failed - try again]"
+        response = gemini_model.generate_content(gemini_prompt)
+        return response.text.strip()
         
     except Exception as e:
         return f"[Error: {str(e)}]"
 
-# UI
+def get_glossary():
+    c.execute("SELECT english, lao FROM glossary")
+    terms = c.fetchall()
+    if terms:
+        return "\n".join([f"• {e.capitalize()} → {l}" for e, l in terms])
+    return "No terms yet."
+
+# UI - FIXED LAYOUT
 direction = st.radio("Direction", ["English → Lao", "Lao → English"], horizontal=True)
 
-tab1, tab2 = st.tabs(["📁 Translate File", "📝 Translate Text"])
+# TEXT TRANSLATION - SIMPLIFIED
+st.subheader("📝 Translate Text")
+text = st.text_area("Enter text to translate", height=100, 
+                   placeholder="Example: dogs stepped on mines")
 
-# TEXT TRANSLATION
-with tab2:
-    text = st.text_area("Enter text to translate", height=150, 
-                       placeholder="Example: dogs stepped on mines")
-    
-   
+# BUTTON ALWAYS VISIBLE
+if st.button("Translate", type="primary"):
+    if text.strip():
+        with st.spinner("Translating..."):
+            result = translate_text(text, direction)
+            if "[Error:" in result:
+                st.error(result)
+            else:
+                st.success("Translation:")
+                st.write(result)
+    else:
+        st.warning("Please enter some text")
+
+# FILE TRANSLATION
+st.subheader("📁 Translate File")
+uploaded_file = st.file_uploader("Upload DOCX • XLSX • PPTX", type=["docx", "xlsx", "pptx"])
+
+if uploaded_file:
+    if st.button("Translate File", type="secondary"):
+        with st.spinner("Translating file..."):
+            try:
+                file_bytes = uploaded_file.read()
+                file_name = uploaded_file.name
+                ext = file_name.rsplit(".", 1)[-1].lower()
+                output = BytesIO()
+
+                if ext == "docx":
+                    doc = Document(BytesIO(file_bytes))
+                    for p in doc.paragraphs:
+                        if p.text.strip():
+                            p.text = translate_text(p.text, direction)
+                    doc.save(output)
+
+                elif ext == "xlsx":
+                    wb = load_workbook(BytesIO(file_bytes))
+                    for ws in wb.worksheets:
+                        for row in ws.iter_rows():
+                            for cell in row:
+                                if isinstance(cell.value, str) and cell.value.strip():
+                                    cell.value = translate_text(cell.value, direction)
+                    wb.save(output)
+
+                elif ext == "pptx":
+                    prs = Presentation(BytesIO(file_bytes))
+                    for slide in prs.slides:
+                        for shape in slide.shapes:
+                            if shape.has_text_frame:
+                                for p in shape.text_frame.paragraphs:
+                                    if p.text.strip():
+                                        p.text = translate_text(p.text, direction)
+                    prs.save(output)
+
+                output.seek(0)
+                st.success("✅ File translated!")
+                st.download_button("📥 Download", output, f"TRANSLATED_{file_name}")
+                
+            except Exception as e:
+                st.error(f"File failed: {str(e)}")
+
+# GLOSSARY
+with st.expander("📚 Teach Johny new terms"):
+    col1, col2 = st.columns(2)
+    with col1: eng = st.text_input("English")
+    with col2: lao = st.text_input("Lao")
+    if st.button("Save Term"):
+        if eng.strip() and lao.strip():
+            c.execute("INSERT OR IGNORE INTO glossary VALUES (?, ?)", (eng.lower(), lao))
+            conn.commit()
+            st.success(f"✅ Learned: {eng} → {lao}")
+            st.rerun()
+
+# STATS
+c.execute("SELECT COUNT(*) FROM glossary")
+count = c.fetchone()[0]
+st.caption(f"📊 Glossary: {count} terms • Grok + Gemini Hybrid")
