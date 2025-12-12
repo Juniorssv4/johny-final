@@ -14,7 +14,7 @@ from openpyxl import load_workbook
 
 from pptx import Presentation
 
-# GROK API — FLUENT LIKE GEMINI
+# GROK API — FLUENT LIKE GEMINI (December 2025 UPDATE)
 
 try:
 
@@ -26,7 +26,7 @@ try:
 
     )
 
-    model_name = "grok-4-1-fast-non-reasoning"  # Latest, fluent multilingual model (Dec 2025)
+    model_name = "grok-4-1-fast-non-reasoning"  # Latest fast multilingual model (2M context, no reasoning overhead)
 
 except:
 
@@ -60,9 +60,9 @@ default_terms = {
 
     "Land Release": "ການປົດປ່ອຍພື້ນທີ່", "Quality Assurance": "ການຮັບປະກັນຄຸນນະພາບ",
 
-    "Confirmed Hazardous Area": "ພື້ນທີ່ຢັ້ງຢືນວ່າເປັນອັນຕະລາຍ", "CHA": "ພື້ນທີ່ຢັ້ງຢືນວ່າເປັນອັນຕະລາຍ",
+    "Confirmed Hazardous Area": "ພື້ນທີ່ຢັ້ງຢືນວ່າເປັນອັນຕະລາຯ", "CHA": "ພື້ນທີ່ຢັ້ງຢືນວ່າເປັນອັນຕະລາຯ",
 
-    "Suspected Hazardous Area": "ພື້ນທີ່ສົງໃສວ່າເປັນອັນຕະລາຍ", "SHA": "ພື້ນທີ່ສົງໃສວ່າເປັນອັນຕະລາຍ",
+    "Suspected Hazardous Area": "ພື້ນທີ່ສົງໃສວ່າເປັນອັນຕະລາຯ", "SHA": "ພື້ນທີ່ສົງໃສວ່າເປັນອັນຕະລາຯ",
 
 }
 
@@ -88,7 +88,7 @@ def translate_text(text, direction):
 
     target = "Lao" if direction == "English → Lao" else "English"
 
-    prompt = f"""You are an expert Mine Action translator for Laos, like Gemini — make translations fluent, natural, and idiomatic (everyday Lao phrasing, not literal word-for-word). Use smooth sentence flow, cultural nuance, and native speaker style for readability.
+    prompt = f"""You are an expert Mine Action translator for Laos, trained like Gemini — make translations fluent, natural, idiomatic, and readable (everyday Lao phrasing, smooth sentence flow, cultural nuance, native speaker style). Avoid literal word-for-word; prioritize clarity and naturalness.
 
 Use EXACTLY these terms (never change them):
 
@@ -96,7 +96,7 @@ Use EXACTLY these terms (never change them):
 
 Translate the following text to {target}.
 
-Return ONLY the translated text, nothing else.
+Return ONLY the translated text, nothing else (no explanations, no JSON).
 
 Text: {text}"""
 
@@ -108,7 +108,7 @@ Text: {text}"""
 
             messages=[{"role": "user", "content": prompt}],
 
-            temperature=0.3,  # Slightly higher for fluency (Gemini-like)
+            temperature=0.3,  # Gemini-like creativity for fluency
 
             max_tokens=4096
 
