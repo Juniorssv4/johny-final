@@ -11,64 +11,112 @@ st.set_page_config(page_title="Johny", page_icon="🇱🇦", layout="centered")
 st.title("Johny — NPA Lao Translator")
 st.caption("Working translation • Direct results • Mine Action specialist")
 
-# WORKING TRANSLATION API
+# FIXED TRANSLATION FUNCTION
 def translate_text(text, target="Lao"):
-    """Use real Google Translate API (always works)"""
+    """Force translation to Lao with proper handling"""
     if not text.strip():
         return text
     
     try:
-        # Real Google Translate API
-        url = f"https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl={target.lower()}&dt=t&q={requests.utils.quote(text)}"
+        # Force English to Lao translation
+        url = f"https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=lo&dt=t&q={requests.utils.quote(text)}"
         response = requests.get(url, timeout=10)
         
         if response.status_code == 200:
             data = response.json()
             translation = "".join([item[0] for item in data[0]])
             
-            # Post-process for natural Lao
-            translation = translation.replace("ຂ້ອຍ", "ຂ້າ")
-            translation = translation.replace("ຂ້າພະເຈົ້າ", "ຂ້າ")
-            
-            return translation
+            # Verify we got Lao text
+            if any('\u0E80' <= char <= '\u0EFF' for char in translation):
+                return translation
+            else:
+                # If no Lao chars, try alternative approach
+                return force_lao_translation(text)
     except:
         pass
     
-    return "[Translation unavailable]"
+    return force_lao_translation(text)
+
+def force_lao_translation(text):
+    """Force Lao translation using segment approach"""
+    try:
+        # Break into sentences and translate each
+        sentences = text.split('.')
+        translations = []
+        
+        for sentence in sentences:
+            if sentence.strip():
+                # Simple word-by-word approach for complex text
+                words = sentence.strip().split()
+                translated_words = []
+                
+                for word in words:
+                    # Translate individual words
+                    word_url = f"https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=lo&dt=t&q={requests.utils.quote(word)}"
+                    word_response = requests.get(word_url, timeout=5)
+                    
+                    if word_response.status_code == 200:
+                        word_data = word_response.json()
+                        translated_word = word_data[0][0][0] if word_data[0] else word
+                        translated_words.append(translated_word)
+                    else:
+                        translated_words.append(word)
+                
+                translations.append(" ".join(translated_words))
+        
+        return ". ".join(translations)
+    except:
+        return "[Translation failed]"
 
 # UI
 direction = st.radio("Direction", ["English → Lao", "Lao → English"], horizontal=True)
 
 # INSTANT TRANSLATION
-st.subheader("Translation")
-text = st.text_area("Enter text", height=100, placeholder="dogs stepped on mines")
+text = st.text_area("Enter text", height=150, placeholder="Enter your text here...")
 
 if st.button("Translate", type="primary"):
     if text.strip():
         with st.spinner(""):
             result = translate_text(text, "Lao" if direction == "English → Lao" else "English")
             
-            if result and "[unavailable]" not in result:
+            if result and "[failed]" not in result:
                 st.write(result)
+                # Verify we got Lao
+                if any('\u0E80' <= char <= '\u0EFF' for char in result):
+                    st.caption("✅ Lao translation complete")
+                else:
+                    st.caption("⚠️ Translation may need adjustment")
             else:
                 st.error("Translation failed")
     else:
         st.warning("Please enter text")
 
-# QUICK EXAMPLES
-examples = ["dogs stepped on mines", "mine clearance", "risk education"]
-for ex in examples:
-    if st.button(f"🎯 {ex}"):
-        result = translate_text(ex, "Lao")
-        if result and "[unavailable]" not in result:
-            st.write(f"{ex} → {result}")
+# TEST YOUR LONG TEXT
+st.subheader("Test with your text:")
+test_text = """advance and travel claims.
+Authorize for booking of financial data into the Agresso system for the finance users in the south.
+Hi all, Please be informed that I will be out of the office from 13-21 December for SD and AL.
+During my absence, Phetdara his email address @Phetdara Luangonchanh will be acting as Field Finance Coordinator.
+He is authorized to perform the following tasks up to my level:
+• Review expenditure before payment, including RFLP, PR, PO, petty cash claims, Settlement of advance and travel claims.
+• Authorize for booking of financial data into the Agresso system for the finance users in the south.
+• Follow up on MTR data collection from respective departments.
+• Process and submit fund requests to VTE by 15 December for funds to be spent during 01-12 January 2026
+If anything requires my attention, please feel free to contact me via my What's App +85620 95494895.
+Thank you for your cooperation."""
+
+if st.button("Translate this text"):
+    result = translate_text(test_text, "Lao")
+    if result and "[failed]" not in result:
+        st.success("Translation:")
+        st.write(result)
+    else:
+        st.error("Failed to translate")
 
 # FILE TRANSLATION
-st.subheader("Translate Files")
-uploaded_file = st.file_uploader("Upload DOCX, XLSX, or PPTX", type=["docx", "xlsx", "pptx"])
-
+uploaded_file = st.file_uploader("Upload file", type=["docx", "xlsx", "pptx"])
 if uploaded_file and st.button("Translate File"):
-    with st.spinner("Translating file..."):
+    with st.spinner("Translating..."):
         try:
             file_bytes = uploaded_file.read()
             file_name = uploaded_file.name
@@ -80,7 +128,7 @@ if uploaded_file and st.button("Translate File"):
                 for p in doc.paragraphs:
                     if p.text.strip():
                         translated = translate_text(p.text, "Lao")
-                        if translated and "[unavailable]" not in translated:
+                        if translated and "[failed]" not in translated:
                             p.text = translated
                 doc.save(output)
 
@@ -91,7 +139,7 @@ if uploaded_file and st.button("Translate File"):
                         for cell in row:
                             if isinstance(cell.value, str) and cell.value.strip():
                                 translated = translate_text(cell.value, "Lao")
-                                if translated and "[unavailable]" not in translated:
+                                if translated and "[failed]" not in translated:
                                     cell.value = translated
                 wb.save(output)
 
@@ -103,7 +151,7 @@ if uploaded_file and st.button("Translate File"):
                             for p in shape.text_frame.paragraphs:
                                 if p.text.strip():
                                     translated = translate_text(p.text, "Lao")
-                                    if translated and "[unavailable]" not in translated:
+                                    if translated and "[failed]" not in translated:
                                         p.text = translated
                 prs.save(output)
 
@@ -129,4 +177,4 @@ with st.expander("📚 Add Terms"):
         conn.commit()
         st.success(f"✅ Saved: {eng} → {lao}")
 
-st.caption("📡 Working translation API • Real results • No fake Gemini endpoints")
+st.caption("🔄 Working translation • Force Lao output • Complex text handling")
