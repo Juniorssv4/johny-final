@@ -1,7 +1,5 @@
 import streamlit as st
 
-import time
-
 import openai
 
 import google.generativeai as genai
@@ -16,11 +14,11 @@ from openpyxl import load_workbook
 
 from pptx import Presentation
 
-# GROK ROUTES TO GEMINI — UNLIMITED + FLUENT LAO
+# GROK ROUTES (UNLIMITED) + GEMINI TRANSLATES (FLUENT LAO)
 
 try:
 
-    # Grok for routing (unlimited)
+    # Grok for routing/tool-calling
 
     grok_client = openai.OpenAI(
 
@@ -32,7 +30,7 @@ try:
 
     grok_model = "grok-4-1-fast-non-reasoning"
 
-    # Gemini for translation (fluent)
+    # Gemini for translation
 
     genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
 
@@ -53,8 +51,6 @@ c = conn.cursor()
 c.execute('''CREATE TABLE IF NOT EXISTS glossary (english TEXT, lao TEXT, PRIMARY KEY(english, lao))''')
 
 conn.commit()
-
-# Your full NPA glossary
 
 default_terms = {
 
@@ -98,7 +94,7 @@ def translate_text(text, direction):
 
     target = "Lao" if direction == "English → Lao" else "English"
 
-    # Grok pre-processes (unlimited routing)
+    # Grok routes/pre-processes (unlimited)
 
     grok_prompt = f"""You are a routing assistant. Review this text for Mine Action terms and prepare it for Gemini translation. Ensure glossary terms are preserved. Return ONLY the pre-processed text ready for Gemini.
 
