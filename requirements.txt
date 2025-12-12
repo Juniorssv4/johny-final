@@ -1,5 +1,7 @@
 streamlit
 
+openai
+
 google-generativeai
 
 python-docx
@@ -10,6 +12,3 @@ python-pptx
 
 pdf2docx
  
-openai
-
-openai google-generativeai
