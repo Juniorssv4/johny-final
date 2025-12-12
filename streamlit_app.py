@@ -14,7 +14,7 @@ from openpyxl import load_workbook
 
 from pptx import Presentation
 
-# GROK API — FLUENT LIKE GEMINI (December 2025 UPDATE)
+# GROK API — FLUENT LIKE GEMINI (2025 PROMPT ENGINEERING)
 
 try:
 
@@ -26,7 +26,7 @@ try:
 
     )
 
-    model_name = "grok-4-1-fast-non-reasoning"  # Latest fast multilingual model (2M context, no reasoning overhead)
+    model_name = "grok-4-1-fast-non-reasoning"  # Latest multilingual model
 
 except:
 
@@ -88,7 +88,7 @@ def translate_text(text, direction):
 
     target = "Lao" if direction == "English → Lao" else "English"
 
-    prompt = f"""You are an expert Mine Action translator for Laos, trained like Gemini — make translations fluent, natural, idiomatic, and readable (everyday Lao phrasing, smooth sentence flow, cultural nuance, native speaker style). Avoid literal word-for-word; prioritize clarity and naturalness.
+    prompt = f"""You are an expert Mine Action translator for Laos. Translate like Gemini 2.5 Flash: fluent, natural, idiomatic Lao (everyday phrasing, smooth flow, cultural nuance, native speaker style). Avoid literal word-for-word; prioritize readability and context.
 
 Use EXACTLY these terms (never change them):
 
@@ -96,7 +96,7 @@ Use EXACTLY these terms (never change them):
 
 Translate the following text to {target}.
 
-Return ONLY the translated text, nothing else (no explanations, no JSON).
+Return ONLY the translated text, nothing else (no explanations, no JSON, no extra words).
 
 Text: {text}"""
 
@@ -108,7 +108,7 @@ Text: {text}"""
 
             messages=[{"role": "user", "content": prompt}],
 
-            temperature=0.3,  # Gemini-like creativity for fluency
+            temperature=0.3,  # For Gemini-like creativity/fluency
 
             max_tokens=4096
 
