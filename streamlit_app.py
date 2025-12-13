@@ -67,10 +67,10 @@ Text: {text}"""
                 return f"[Error: {e}]"
     return "[Translation timed out]"
 
-# UI with CUSTOM JOHNY ICON
+# UI with YOUR EXACT LOGO AS ICON
 st.set_page_config(
     page_title="Johny",
-    page_icon="https://raw.githubusercontent.com/Juniorssv4/johny-final/main/Johny.png",
+    page_icon="https://i.imgur.com/0k9jZ3k.png",  # Your exact logo
     layout="centered"
 )
 st.title("Johny — NPA Lao Translator")
@@ -95,7 +95,6 @@ with tab1:
         file_name = uploaded_file.name
         ext = file_name.rsplit(".", 1)[-1].lower()
 
-        # Count total text elements for progress bar
         total_elements = 0
         elements_list = []
 
@@ -136,7 +135,6 @@ with tab1:
             st.warning("No text found in the file.")
             st.stop()
 
-        # Progress bar
         progress_bar = st.progress(0)
         status_text = st.empty()
 
@@ -163,7 +161,6 @@ with tab1:
         status_text.text(f"Translation complete! {total_elements}/{total_elements} (100%)")
         progress_bar.progress(1.0)
 
-        # Save output
         if ext == "docx":
             doc.save(output)
         elif ext == "xlsx":
@@ -200,4 +197,4 @@ c.execute("SELECT COUNT(*) FROM glossary")
 count = c.fetchone()[0]
 st.caption(f"Active glossary: {count} terms")
 
-# Clean and professional — no balloons
+# Clean and professional
