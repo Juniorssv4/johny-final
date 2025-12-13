@@ -9,7 +9,7 @@ from pptx import Presentation
 
 # GEMINI ONLY — PERFECT LAO + SMART RETRY
 try:
-    genai.configure(api_key="AIzaSyDjEYdkii799tqjQnkvgirWt7sLpEXGOCI")  # Your new key
+    genai.configure(api_key="AIzaSyCFEpR4GTjs8p3D7dovAR9YXvVYBVeZYVM")  # Your new key
     model = genai.GenerativeModel("gemini-2.5-flash")
 except:
     st.error("Gemini key error — contact admin if issue persists")
