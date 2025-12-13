@@ -1,18 +1,25 @@
 import streamlit as st
 import time
 import google.generativeai as genai
+from google.generativeai.types import HarmCategory, HarmBlockThreshold
 import sqlite3
 from io import BytesIO
 from docx import Document
 from openpyxl import load_workbook
 from pptx import Presentation
 
-# GEMINI ONLY — PERFECT LAO QUALITY + SMART RETRY
+# GEMINI ONLY — PERFECT LAO + EXPONENTIAL BACKOFF RETRY
 try:
     genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-    model = genai.GenerativeModel("gemini-2.5-flash")
-except:
-    st.error("Add your Gemini key in Secrets → GEMINI_API_KEY")
+    model = genai.GenerativeModel(
+        "gemini-2.5-flash",
+        generation_config={"temperature": 0.1, "max_output_tokens": 8192},
+        safety_settings={
+            HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_NONE,
+        }
+    )
+except Exception as e:
+    st.error(f"Gemini setup failed: {e}. Check your GEMINI_API_KEY in Secrets.")
     st.stop()
 
 # Database + Glossary
@@ -55,18 +62,19 @@ Return ONLY the translated text, nothing else.
 
 Text: {text}"""
 
-    for attempt in range(6):  # max 6 retries (covers even big files)
+    backoff = 5  # initial wait
+    for attempt in range(6):
         try:
             response = model.generate_content(prompt)
             return response.text.strip()
         except Exception as e:
             if "429" in str(e) or "quota" in str(e).lower():
-                wait = 40 + attempt * 10
-                st.toast(f"Rate limit — waiting {wait}s...")
-                time.sleep(wait)
+                st.toast(f"Rate limit hit — waiting {backoff}s (attempt {attempt + 1}/6)")
+                time.sleep(backoff)
+                backoff *= 2  # exponential backoff
             else:
-                return f"[Error: {e}]"
-    return "[Translation timed out — try again]"
+                return f"[Error: {str(e)}]"
+    return "[Translation timed out — try again later]"
 
 # UI
 st.set_page_config(page_title="Johny", page_icon="🇱🇦", layout="centered")
