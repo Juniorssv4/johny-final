@@ -118,13 +118,13 @@ Text: {text}"""
 
     return "[Translation timed out]"
 
-# UI with YOUR EXACT LOGO AS ICON
+# UI with BRAIN EMOJI ICON (works perfectly on iOS)
 
 st.set_page_config(
 
     page_title="Johny",
 
-    page_icon="https://i.imgur.com/0k9jZ3k.png",  # Your exact Johny brain logo
+    page_icon="🧠",  # Brain emoji — reliable on iOS
 
     layout="centered"
 
@@ -325,4 +325,12 @@ with st.expander("Teach Johny a new term (saved forever)"):
             st.rerun()
 
 # Stats
+
+c.execute("SELECT COUNT(*) FROM glossary")
+
+count = c.fetchone()[0]
+
+st.caption(f"Active glossary: {count} terms")
+
+# Clean and professional
  
