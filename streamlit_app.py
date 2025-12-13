@@ -67,8 +67,12 @@ Text: {text}"""
                 return f"[Error: {e}]"
     return "[Translation timed out]"
 
-# UI
-st.set_page_config(page_title="Johny", page_icon="🇱🇦", layout="centered")
+# UI with CUSTOM JOHNY ICON
+st.set_page_config(
+    page_title="Johny",
+    page_icon="https://raw.githubusercontent.com/Juniorssv4/johny-final/main/Johny.png",
+    layout="centered"
+)
 st.title("Johny — NPA Lao Translator")
 
 direction = st.radio("Direction", ["English → Lao", "Lao → English"], horizontal=True)
@@ -82,7 +86,6 @@ with tab1:
     )
 
     if uploaded_file is not None:
-        # Check file size (10MB = 10 * 1024 * 1024 bytes)
         if uploaded_file.size > 10 * 1024 * 1024:
             st.error("File too large! Maximum size is 10MB.")
             st.stop()
@@ -197,4 +200,4 @@ c.execute("SELECT COUNT(*) FROM glossary")
 count = c.fetchone()[0]
 st.caption(f"Active glossary: {count} terms")
 
-# No balloons, no caption text — clean and professional
+# Clean and professional — no balloons
