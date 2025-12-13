@@ -70,14 +70,23 @@ Text: {text}"""
 # UI
 st.set_page_config(page_title="Johny", page_icon="🇱🇦", layout="centered")
 st.title("Johny — NPA Lao Translator")
-st.caption("Pure Gemini quality • Progress bar with % • Add to Home screen = real app")
 
 direction = st.radio("Direction", ["English → Lao", "Lao → English"], horizontal=True)
 
 tab1, tab2 = st.tabs(["Translate File", "Translate Text"])
 
 with tab1:
-    uploaded_file = st.file_uploader("Upload DOCX • XLSX • PPTX", type=["docx", "xlsx", "pptx"])
+    uploaded_file = st.file_uploader(
+        "Upload DOCX • XLSX • PPTX (max 10MB)",
+        type=["docx", "xlsx", "pptx"]
+    )
+
+    if uploaded_file is not None:
+        # Check file size (10MB = 10 * 1024 * 1024 bytes)
+        if uploaded_file.size > 10 * 1024 * 1024:
+            st.error("File too large! Maximum size is 10MB.")
+            st.stop()
+
     if uploaded_file and st.button("Translate File", type="primary"):
         file_bytes = uploaded_file.read()
         file_name = uploaded_file.name
@@ -135,7 +144,7 @@ with tab1:
         for element_type, element in elements_list:
             status_text.text(f"Translating... {translated_count}/{total_elements} ({int((translated_count/total_elements)*100)}%)")
 
-            if element_type == "doc_para" or element_type == "doc_cell":
+            if element_type in ["doc_para", "doc_cell"]:
                 translated = translate_text(element.text, direction)
                 element.text = translated
             elif element_type == "xls":
@@ -186,6 +195,6 @@ with st.expander("Teach Johny a new term (saved forever)"):
 # Stats
 c.execute("SELECT COUNT(*) FROM glossary")
 count = c.fetchone()[0]
-st.caption(f"Active glossary: {count} terms • Pure Gemini quality")
+st.caption(f"Active glossary: {count} terms")
 
-st.balloons()
+# No balloons, no caption text — clean and professional
