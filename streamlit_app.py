@@ -303,5 +303,5 @@ c.execute("SELECT COUNT(*) FROM glossary")
 count = c.fetchone()[0]
 
 st.caption(f"Active glossary: {count} terms • Pure Gemini quality")
-For Sale Page
+
  
