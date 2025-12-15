@@ -1,15 +1,12 @@
 import streamlit as st
 import time
 import google.generativeai as genai
-# NEW IMPORT: Import the specific error class for 429/quota errors
-from google.generativeai.errors import APIError 
 import sqlite3
 from io import BytesIO
 from docx import Document
 from openpyxl import load_workbook
 from pptx import Presentation
-# UPDATED IMPORT: Added 'retry_if_exception_type' for better control
-from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type, RetryError 
+from tenacity import retry, stop_after_attempt, wait_exponential, RetryError
 
 # GEMINI — PERFECT LAO + EXPONENTIAL BACKOFF RETRY
 try:
@@ -19,15 +16,12 @@ except:
     st.error("Add your Gemini key in Secrets → GEMINI_API_KEY")
     st.stop()
 
-# Exponential backoff decorator — retries ONLY on APIError (including 429)
+# Exponential backoff decorator — retries on any error (including 429)
 @retry(
     stop=stop_after_attempt(6),
-    wait=wait_exponential(multiplier=1, min=4, max=60),
-    # THIS IS THE CRITICAL FIX: Only retry when a known API error occurs
-    retry=retry_if_exception_type(APIError) 
+    wait=wait_exponential(multiplier=1, min=4, max=60)
 )
 def safe_generate_content(prompt):
-    """Safe API call with backoff for rate limits."""
     return model.generate_content(prompt)
 
 # Database + Glossary
@@ -73,13 +67,11 @@ Text: {text}"""
         response = safe_generate_content(prompt)
         return response.text.strip()
     except RetryError:
-        # This executes only if all 6 attempts failed, which means the rate limit is severe
-        st.error("Translation timed out after retries (6 attempts, 1 min max wait). The rate limit is too high. Try again in 5 minutes.")
-        return "[Translation failed — Quota exhausted, please wait]"
+        st.error("Translation timed out after retries — rate limit delay in Tier 1. Try again in 5 minutes.")
+        return "[Translation failed — try later]"
     except Exception as e:
-        # Catch any other unexpected API errors
-        st.error(f"General API error: {str(e)}")
-        return "[Translation failed — Check API Key or Model]"
+        st.error(f"API error: {str(e)}")
+        return "[Translation failed — try again]"
 
 # UI
 st.set_page_config(page_title="Johny", page_icon="🇱🇦", layout="centered")
@@ -151,8 +143,8 @@ with tab1:
         output = BytesIO()
 
         translated_count = 0
-        # Placeholder for the new file object
-        translated_file_object = None 
+
+        translated_file_object = None
 
         for element_type, element in elements_list:
             status_text.text(f"Translating... {translated_count}/{total_elements} ({int((translated_count/total_elements)*100)}%)")
@@ -176,7 +168,6 @@ with tab1:
         status_text.text(f"Translation complete! {total_elements}/{total_elements} (100%)")
         progress_bar.progress(1.0)
 
-        # Save the translated file
         if translated_file_object:
             if ext == "docx":
                 translated_file_object.save(output)
@@ -184,7 +175,7 @@ with tab1:
                 translated_file_object.save(output)
             elif ext == "pptx":
                 translated_file_object.save(output)
-            
+
             output.seek(0)
             st.success("File translated perfectly!")
             st.download_button("Download Translated File", output, f"TRANSLATED_{file_name}")
