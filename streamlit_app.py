@@ -7,7 +7,6 @@ from docx import Document
 from openpyxl import load_workbook
 from pptx import Presentation
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
-from google.generativeai.errors import APIError  # Correct exception for 429
 
 # GEMINI — PERFECT LAO + EXPONENTIAL BACKOFF RETRY
 try:
@@ -21,7 +20,7 @@ except:
 @retry(
     stop=stop_after_attempt(5),
     wait=wait_exponential(multiplier=1, min=2, max=60),
-    retry=retry_if_exception_type(APIError)  # Retry on 429/quota errors
+    retry=retry_if_exception_type(Exception)  # Catch all errors including 429
 )
 def safe_generate_content(model, prompt):
     """Safe API call with backoff for rate limits."""
@@ -71,9 +70,8 @@ Text: {text}"""
         return response.text.strip()
     except Exception as e:
         st.toast(f"Rate limit — retrying with backoff...")
-        # Fallback manual wait if needed
         time.sleep(40)
-        return translate_text(text, direction)  # Recursive retry
+        return translate_text(text, direction)  # Fallback retry
 
 # UI
 st.set_page_config(page_title="Johny", page_icon="🇱🇦", layout="centered")
@@ -139,7 +137,6 @@ with tab1:
             st.warning("No text found in the file.")
             st.stop()
 
-        # Progress bar
         progress_bar = st.progress(0)
         status_text = st.empty()
 
@@ -166,7 +163,6 @@ with tab1:
         status_text.text(f"Translation complete! {total_elements}/{total_elements} (100%)")
         progress_bar.progress(1.0)
 
-        # Save output
         if ext == "docx":
             doc.save(output)
         elif ext == "xlsx":
@@ -202,5 +198,3 @@ with st.expander("Teach Johny a new term (saved forever)"):
 c.execute("SELECT COUNT(*) FROM glossary")
 count = c.fetchone()[0]
 st.caption(f"Active glossary: {count} terms")
-
-# Clean and professional
