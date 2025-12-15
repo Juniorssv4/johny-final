@@ -13,8 +13,6 @@ from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_excep
 
 # GEMINI — PERFECT LAO + EXPONENTIAL BACKOFF RETRY
 try:
-    # Use the new, correct client import name
-    from google import genai as new_genai 
     genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
     model = genai.GenerativeModel("gemini-2.5-flash")
 except:
