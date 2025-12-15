@@ -6,7 +6,7 @@ from io import BytesIO
 from docx import Document
 from openpyxl import load_workbook
 from pptx import Presentation
-from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
+from tenacity import retry, stop_after_attempt, wait_exponential
 
 # GEMINI — PERFECT LAO + EXPONENTIAL BACKOFF RETRY
 try:
@@ -16,14 +16,12 @@ except:
     st.error("Add your Gemini key in Secrets → GEMINI_API_KEY")
     st.stop()
 
-# Exponential backoff decorator for API calls
+# Exponential backoff decorator — retries on any error (including 429)
 @retry(
-    stop=stop_after_attempt(5),
-    wait=wait_exponential(multiplier=1, min=2, max=60),
-    retry=retry_if_exception_type(Exception)  # Catch all errors including 429
+    stop=stop_after_attempt(6),
+    wait=wait_exponential(multiplier=1, min=4, max=60)
 )
-def safe_generate_content(model, prompt):
-    """Safe API call with backoff for rate limits."""
+def safe_generate_content(prompt):
     return model.generate_content(prompt)
 
 # Database + Glossary
@@ -66,12 +64,11 @@ Return ONLY the translated text, nothing else.
 Text: {text}"""
 
     try:
-        response = safe_generate_content(model, prompt)
+        response = safe_generate_content(prompt)
         return response.text.strip()
     except Exception as e:
-        st.toast(f"Rate limit — retrying with backoff...")
-        time.sleep(40)
-        return translate_text(text, direction)  # Fallback retry
+        st.toast(f"Rate limit hit — retrying automatically...")
+        raise  # Let tenacity handle retry
 
 # UI
 st.set_page_config(page_title="Johny", page_icon="🇱🇦", layout="centered")
