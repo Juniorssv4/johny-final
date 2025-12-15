@@ -144,23 +144,18 @@ with tab1:
 
         translated_count = 0
 
-        translated_file_object = None
-
         for element_type, element in elements_list:
             status_text.text(f"Translating... {translated_count}/{total_elements} ({int((translated_count/total_elements)*100)}%)")
 
             if element_type in ["doc_para", "doc_cell"]:
                 translated = translate_text(element.text, direction)
                 element.text = translated
-                translated_file_object = doc
             elif element_type == "xls":
                 translated = translate_text(element.value, direction)
                 element.value = translated
-                translated_file_object = wb
             elif element_type == "ppt":
                 translated = translate_text(element.text, direction)
                 element.text = translated
-                translated_file_object = prs
 
             translated_count += 1
             progress_bar.progress(translated_count / total_elements)
@@ -168,19 +163,17 @@ with tab1:
         status_text.text(f"Translation complete! {total_elements}/{total_elements} (100%)")
         progress_bar.progress(1.0)
 
-        if translated_file_object:
-            if ext == "docx":
-                translated_file_object.save(output)
-            elif ext == "xlsx":
-                translated_file_object.save(output)
-            elif ext == "pptx":
-                translated_file_object.save(output)
+        # Save output
+        if ext == "docx":
+            doc.save(output)
+        elif ext == "xlsx":
+            wb.save(output)
+        elif ext == "pptx":
+            prs.save(output)
 
-            output.seek(0)
-            st.success("File translated perfectly!")
-            st.download_button("Download Translated File", output, f"TRANSLATED_{file_name}")
-        else:
-            st.error("Error: Could not save the translated file.")
+        output.seek(0)
+        st.success("File translated perfectly!")
+        st.download_button("Download Translated File", output, f"TRANSLATED_{file_name}")
 
 with tab2:
     text = st.text_area("Enter text to translate", height=200)
