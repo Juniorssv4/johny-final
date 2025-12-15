@@ -7,7 +7,7 @@ from docx import Document
 from openpyxl import load_workbook
 from pptx import Presentation
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
-from google.generativeai.types import StopCandidateException
+from google.generativeai.errors import APIError  # Correct exception for 429
 
 # GEMINI — PERFECT LAO + EXPONENTIAL BACKOFF RETRY
 try:
@@ -21,7 +21,7 @@ except:
 @retry(
     stop=stop_after_attempt(5),
     wait=wait_exponential(multiplier=1, min=2, max=60),
-    retry=retry_if_exception_type(StopCandidateException)  # Retry on 429/quota errors
+    retry=retry_if_exception_type(APIError)  # Retry on 429/quota errors
 )
 def safe_generate_content(model, prompt):
     """Safe API call with backoff for rate limits."""
@@ -35,13 +35,13 @@ conn.commit()
 
 default_terms = {
     "Unexploded Ordnance": "ລະເບີດທີ່ຍັງບໍ່ທັນແຕກ", "UXO": "ລບຕ",
-    "Cluster Munition": "ລະເບີດລູກວ່ານ", "Bombies": "ບອມບີ",
+    "Cluster Munition": "ລະເບີດລູກຫວ່ານ", "Bombies": "ບອມບີ",
     "Clearance": "ການກວດກູ້", "Victim Assistance": "ການຊ່ວຍເຫຼືອຜູ້ເຄາະຮ້າຍ",
     "Risk Education": "ການໂຄສະນາສຶກສາຄວາມສ່ຽງໄພ", "MRE": "ການໂຄສະນາສຶກສາຄວາມສ່ຽງໄພຈາກລະເບີດ",
-    "Deminer": "ນັກເກັບກູ້", "EOD": "ການທຳລາຯລະເບີດ",
+    "Deminer": "ນັກເກັບກູ້", "EOD": "ການທຳລາຍລະເບີດ",
     "Land Release": "ການປົດປ່ອຍພື້ນທີ່", "Quality Assurance": "ການຮັບປະກັນຄຸນນະພາບ",
-    "Confirmed Hazardous Area": "ພື້ນທີ່ຢັ້ງຢືນວ່າເປັນອັນຕະລາຯ", "CHA": "ພື້ນທີ່ຢັ້ງຢືນວ່າເປັນອັນຕະລາຯ",
-    "Suspected Hazardous Area": "ພື້ນທີ່ສົງໃສວ່າເປັນອັນຕະລາຯ", "SHA": "ພື້ນທີ່ສົງໃສວ່າເປັນອັນຕະລາຯ",
+    "Confirmed Hazardous Area": "ພື້ນທີ່ຢັ້ງຢືນວ່າເປັນອັນຕະລາຍ", "CHA": "ພື້ນທີ່ຢັ້ງຢືນວ່າເປັນອັນຕະລາຍ",
+    "Suspected Hazardous Area": "ພື້ນທີ່ສົງໃສວ່າເປັນອັນຕະລາຍ", "SHA": "ພື້ນທີ່ສົງໃສວ່າເປັນອັນຕະລາຍ",
 }
 for eng, lao in default_terms.items():
     c.execute("INSERT OR IGNORE INTO glossary VALUES (?, ?)", (eng.lower(), lao))
@@ -70,13 +70,10 @@ Text: {text}"""
         response = safe_generate_content(model, prompt)
         return response.text.strip()
     except Exception as e:
-        if "429" in str(e) or "quota" in str(e).lower():
-            st.toast(f"Rate limit — retrying with backoff...")
-            # Fallback to manual wait if tenacity fails
-            time.sleep(40)
-            return translate_text(text, direction)  # Recursive retry
-        else:
-            return f"[Error: {e}]"
+        st.toast(f"Rate limit — retrying with backoff...")
+        # Fallback manual wait if needed
+        time.sleep(40)
+        return translate_text(text, direction)  # Recursive retry
 
 # UI
 st.set_page_config(page_title="Johny", page_icon="🇱🇦", layout="centered")
@@ -102,7 +99,6 @@ with tab1:
         file_name = uploaded_file.name
         ext = file_name.rsplit(".", 1)[-1].lower()
 
-        # Count total text elements for progress bar
         total_elements = 0
         elements_list = []
 
@@ -206,3 +202,5 @@ with st.expander("Teach Johny a new term (saved forever)"):
 c.execute("SELECT COUNT(*) FROM glossary")
 count = c.fetchone()[0]
 st.caption(f"Active glossary: {count} terms")
+
+# Clean and professional
