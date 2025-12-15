@@ -1,201 +1,212 @@
 import streamlit as st
-import time
-import google.generativeai as genai
-import sqlite3
-from io import BytesIO
-from docx import Document
-from openpyxl import load_workbook
-from pptx import Presentation
-from tenacity import retry, stop_after_attempt, wait_exponential, RetryError
 
-# GEMINI — PERFECT LAO + EXPONENTIAL BACKOFF RETRY
-try:
-    genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-    model = genai.GenerativeModel("gemini-2.5-flash")
-except:
-    st.error("Add your Gemini key in Secrets → GEMINI_API_KEY")
+import google.generativeai as genai
+
+from google.api_core.exceptions import ResourceExhausted
+
+import time
+
+import os
+
+import json
+
+# --- Config ---
+
+st.set_page_config(page_title="Johnny – NPA Lao Translator", layout="centered")
+
+st.title("Johnny – NPA Lao Translator")
+
+# API Key from Streamlit secrets
+
+if "GOOGLE_API_KEY" not in st.secrets:
+
+    st.error("API key not found in secrets. Add GOOGLE_API_KEY to Streamlit secrets.")
+
     st.stop()
 
-# Exponential backoff decorator — retries on any error (including 429)
-@retry(
-    stop=stop_after_attempt(6),
-    wait=wait_exponential(multiplier=1, min=4, max=60)
-)
-def safe_generate_content(prompt):
-    return model.generate_content(prompt)
+genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
 
-# Database + Glossary
-conn = sqlite3.connect("memory.db", check_same_thread=False)
-c = conn.cursor()
-c.execute('''CREATE TABLE IF NOT EXISTS glossary (english TEXT, lao TEXT, PRIMARY KEY(english, lao))''')
-conn.commit()
+# Model (use flash for speed/cost, or pro for better quality)
 
-default_terms = {
-    "Unexploded Ordnance": "ລະເບີດທີ່ຍັງບໍ່ທັນແຕກ", "UXO": "ລບຕ",
-    "Cluster Munition": "ລະເບີດລູກຫວ່ານ", "Bombies": "ບອມບີ",
-    "Clearance": "ການກວດກູ້", "Victim Assistance": "ການຊ່ວຍເຫຼືອຜູ້ເຄາະຮ້າຍ",
-    "Risk Education": "ການໂຄສະນາສຶກສາຄວາມສ່ຽງໄພ", "MRE": "ການໂຄສະນາສຶກສາຄວາມສ່ຽງໄພຈາກລະເບີດ",
-    "Deminer": "ນັກເກັບກູ້", "EOD": "ການທຳລາຍລະເບີດ",
-    "Land Release": "ການປົດປ່ອຍພື້ນທີ່", "Quality Assurance": "ການຮັບປະກັນຄຸນນະພາບ",
-    "Confirmed Hazardous Area": "ພື້ນທີ່ຢັ້ງຢືນວ່າເປັນອັນຕະລາຍ", "CHA": "ພື້ນທີ່ຢັ້ງຢືນວ່າເປັນອັນຕະລາຍ",
-    "Suspected Hazardous Area": "ພື້ນທີ່ສົງໃສວ່າເປັນອັນຕະລາຍ", "SHA": "ພື້ນທີ່ສົງໃສວ່າເປັນອັນຕະລາຍ",
-}
-for eng, lao in default_terms.items():
-    c.execute("INSERT OR IGNORE INTO glossary VALUES (?, ?)", (eng.lower(), lao))
-conn.commit()
+MODEL_NAME = "gemini-1.5-flash"  # or "gemini-1.5-pro"
 
-def get_glossary():
-    c.execute("SELECT english, lao FROM glossary")
-    return "\n".join([f"• {e.capitalize()} → {l}" for e, l in c.fetchall()]) or "No terms yet."
+# Load glossary (persistent across sessions via session_state or file if needed)
 
-def translate_text(text, direction):
-    if not text.strip():
-        return text
-    glossary = get_glossary()
-    target = "Lao" if direction == "English → Lao" else "English"
-    prompt = f"""You are an expert Mine Action translator for Laos.
-Use EXACTLY these terms (never change them):
-{glossary}
+if "glossary" not in st.session_state:
 
-Translate the following text to {target}.
-Make it fluent, natural, and idiomatic — like a native speaker.
-Return ONLY the translated text, nothing else.
+    st.session_state.glossary = {}  # {english: lao} or bidirectional
 
-Text: {text}"""
+# --- Sidebar ---
 
-    try:
-        response = safe_generate_content(prompt)
-        return response.text.strip()
-    except RetryError:
-        st.error("Translation timed out after retries — rate limit delay in Tier 1. Try again in 5 minutes.")
-        return "[Translation failed — try later]"
-    except Exception as e:
-        st.error(f"API error: {str(e)}")
-        return "[Translation failed — try again]"
+with st.sidebar:
 
-# UI
-st.set_page_config(page_title="Johny", page_icon="🇱🇦", layout="centered")
-st.title("Johny — NPA Lao Translator")
+    st.header("Direction")
 
-direction = st.radio("Direction", ["English → Lao", "Lao → English"], horizontal=True)
+    direction = st.radio("Translate direction", options=["English → Lao", "Lao → English"], index=0)
 
-tab1, tab2 = st.tabs(["Translate File", "Translate Text"])
+    st.header("Active glossary")
+
+    st.write(f"{len(st.session_state.glossary)} terms")
+
+    if st.session_state.glossary:
+
+        for eng, lao in st.session_state.glossary.items():
+
+            st.write(f"**{eng}** → **{lao}**")
+
+# Tabs
+
+tab1, tab2 = st.tabs(["Translate Text", "Translate File"])
+
+# --- Helper functions ---
+
+def apply_glossary(text, glossary, src_lang):
+
+    """Simple replacement using glossary (case insensitive for English)"""
+
+    if src_lang == "en":
+
+        for eng, lao in glossary.items():
+
+            text = text.replace(eng.lower(), lao).replace(eng.title(), lao).replace(eng.upper(), lao)
+
+    else:
+
+        for eng, lao in glossary.items():
+
+            text = text.replace(lao, eng)
+
+    return text
+
+def translate_with_retry(prompt):
+
+    """Translate with retry on ResourceExhausted (429 quota)"""
+
+    max_retries = 5
+
+    retry_delay = 5  # start with 5 seconds
+
+    for attempt in range(max_retries):
+
+        try:
+
+            model = genai.GenerativeModel(MODEL_NAME)
+
+            response = model.generate_content(prompt)
+
+            return response.text.strip()
+
+        except ResourceExhausted as e:
+
+            if attempt == max_retries - 1:
+
+                raise e  # final fail
+
+            st.warning(f"Rate limit hit (attempt {attempt+1}/{max_retries}). Retrying in {retry_delay} seconds...")
+
+            time.sleep(retry_delay)
+
+            retry_delay *= 2  # exponential backoff
+
+        except Exception as e:
+
+            st.error(f"Unexpected error: {str(e)}")
+
+            return "[Translation failed – try later]"
+
+# --- Text Translation Tab ---
 
 with tab1:
-    uploaded_file = st.file_uploader(
-        "Upload DOCX • XLSX • PPTX (max 10MB)",
-        type=["docx", "xlsx", "pptx"]
-    )
 
-    if uploaded_file is not None:
-        if uploaded_file.size > 10 * 1024 * 1024:
-            st.error("File too large! Maximum size is 10MB.")
-            st.stop()
+    st.write("Enter text to translate")
 
-    if uploaded_file and st.button("Translate File", type="primary"):
-        file_bytes = uploaded_file.read()
-        file_name = uploaded_file.name
-        ext = file_name.rsplit(".", 1)[-1].lower()
+    user_text = st.text_area("", placeholder="Type or paste text here...", height=150)
 
-        total_elements = 0
-        elements_list = []
+    if st.button("Translate Text"):
 
-        if ext == "docx":
-            doc = Document(BytesIO(file_bytes))
-            for p in doc.paragraphs:
-                if p.text.strip():
-                    total_elements += 1
-                    elements_list.append(("doc_para", p))
-            for table in doc.tables:
-                for row in table.rows:
-                    for cell in row.cells:
-                        for p in cell.paragraphs:
-                            if p.text.strip():
-                                total_elements += 1
-                                elements_list.append(("doc_cell", p))
+        if not user_text.strip():
 
-        elif ext == "xlsx":
-            wb = load_workbook(BytesIO(file_bytes))
-            for ws in wb.worksheets:
-                for row in ws.iter_rows():
-                    for cell in row:
-                        if isinstance(cell.value, str) and cell.value.strip():
-                            total_elements += 1
-                            elements_list.append(("xls", cell))
+            st.warning("Please enter some text.")
 
-        elif ext == "pptx":
-            prs = Presentation(BytesIO(file_bytes))
-            for slide in prs.slides:
-                for shape in slide.shapes:
-                    if shape.has_text_frame:
-                        for p in shape.text_frame.paragraphs:
-                            if p.text.strip():
-                                total_elements += 1
-                                elements_list.append(("ppt", p))
+        else:
 
-        if total_elements == 0:
-            st.warning("No text found in the file.")
-            st.stop()
+            with st.spinner("Translating..."):
 
-        progress_bar = st.progress(0)
-        status_text = st.empty()
+                # Determine languages
 
-        output = BytesIO()
+                src_lang = "en" if direction == "English → Lao" else "lo"
 
-        translated_count = 0
+                target_lang = "Lao" if direction == "English → Lao" else "English"
 
-        for element_type, element in elements_list:
-            status_text.text(f"Translating... {translated_count}/{total_elements} ({int((translated_count/total_elements)*100)}%)")
+                # Build prompt
 
-            if element_type in ["doc_para", "doc_cell"]:
-                translated = translate_text(element.text, direction)
-                element.text = translated
-            elif element_type == "xls":
-                translated = translate_text(element.value, direction)
-                element.value = translated
-            elif element_type == "ppt":
-                translated = translate_text(element.text, direction)
-                element.text = translated
+                prompt = f"""
 
-            translated_count += 1
-            progress_bar.progress(translated_count / total_elements)
+                Translate the following text from {src_lang.upper()} to {target_lang}:
 
-        status_text.text(f"Translation complete! {total_elements}/{total_elements} (100%)")
-        progress_bar.progress(1.0)
+                Only output the translation, nothing else.
 
-        # Save output
-        if ext == "docx":
-            doc.save(output)
-        elif ext == "xlsx":
-            wb.save(output)
-        elif ext == "pptx":
-            prs.save(output)
+                Text: "{user_text}"
 
-        output.seek(0)
-        st.success("File translated perfectly!")
-        st.download_button("Download Translated File", output, f"TRANSLATED_{file_name}")
+                """
+
+                try:
+
+                    translation = translate_with_retry(prompt)
+
+                    # Apply glossary after translation
+
+                    translation = apply_glossary(translation, st.session_state.glossary, src_lang)
+
+                    st.success("Translation:")
+
+                    st.markdown(f"**{translation}**")
+
+                except ResourceExhausted:
+
+                    st.error("Translation timed out after retries — rate limit delay in Tier 1. Try again in 5 minutes.")
+
+                    st.info("If this persists even after billing, submit a quota increase request in Google Cloud Console > Quotas > Generative Language API.")
+
+                except Exception:
+
+                    st.error("[Translation failed – try later]")
+
+# --- Teach new term ---
+
+st.divider()
+
+new_term = st.text_input("➕ Teach Johnny a new term (saved forever)")
+
+col1, col2 = st.columns(2)
+
+with col1:
+
+    eng_term = st.text_input("English term")
+
+with col2:
+
+    lao_term = st.text_input("Lao term (ພາສາລາວ)")
+
+if st.button("Save term to glossary"):
+
+    if eng_term and lao_term:
+
+        st.session_state.glossary[eng_term.strip()] = lao_term.strip()
+
+        st.success(f"Saved: {eng_term} → {lao_term}")
+
+        st.rerun()
+
+    else:
+
+        st.warning("Enter both terms.")
+
+# --- File tab placeholder (expand later if needed) ---
 
 with tab2:
-    text = st.text_area("Enter text to translate", height=200)
-    if st.button("Translate Text"):
-        with st.spinner("Translating..."):
-            result = translate_text(text, direction)
-            st.success("Translation:")
-            st.write(result)
 
-# Teach new term
-with st.expander("Teach Johny a new term (saved forever)"):
-    c1, c2 = st.columns(2)
-    with c1: eng = st.text_input("English")
-    with c2: lao = st.text_input("Lao")
-    if st.button("Save"):
-        if eng.strip() and lao.strip():
-            c.execute("INSERT OR IGNORE INTO glossary VALUES (?, ?)", (eng.lower(), lao))
-            conn.commit()
-            st.success("Johny learned it!")
-            st.rerun()
+    st.info("File translation coming soon! For now, use Text tab.")
 
-# Stats
-c.execute("SELECT COUNT(*) FROM glossary")
-count = c.fetchone()[0]
-st.caption(f"Active glossary: {count} terms")
+st.caption("Johnny uses Gemini API. Glossary improvements are user-powered. 🚀")
+ 
