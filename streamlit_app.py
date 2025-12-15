@@ -263,5 +263,4 @@ with tab2:
 # --- Footer ---
 
 st.caption("Johnny uses Google Gemini API • Glossary is user-powered • Made with ❤️ for Lao speakers")
-For Sale Page
  
