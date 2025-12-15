@@ -5,4 +5,5 @@ python-docx
 openpyxl
 python-pptx
 pdf2docx
+google-genai
 tenacity
