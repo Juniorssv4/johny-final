@@ -1,9 +1,9 @@
 streamlit
 openai
-google-generativeai
 python-docx
 openpyxl
 python-pptx
 pdf2docx
-google-genai
+google-generativeai 
+google-genai        
 tenacity
