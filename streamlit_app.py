@@ -6,47 +6,89 @@ from google.api_core.exceptions import ResourceExhausted
 
 import time
 
-import os
-
-import json
-
-# --- Config ---
+# --- Page Config ---
 
 st.set_page_config(page_title="Johnny – NPA Lao Translator", layout="centered")
 
 st.title("Johnny – NPA Lao Translator")
 
-# API Key from Streamlit secrets
+# --- Sidebar: Debug Secrets Status ---
 
-if "GOOGLE_API_KEY" not in st.secrets:
+st.sidebar.header("🔧 Debug: Secrets Status")
 
-    st.error("API key not found in secrets. Add GOOGLE_API_KEY to Streamlit secrets.")
+api_key = None
+
+if hasattr(st, "secrets") and st.secrets:
+
+    st.sidebar.success("Secrets file loaded successfully!")
+
+    st.sidebar.code(f"Available keys: {list(st.secrets.keys())}")
+
+    if "GOOGLE_API_KEY" in st.secrets:
+
+        api_key = st.secrets["GOOGLE_API_KEY"].strip()
+
+        if api_key and len(api_key) > 10 and api_key.startswith("AIza"):
+
+            st.sidebar.success("Valid Gemini API key detected! 🚀")
+
+        else:
+
+            st.sidebar.warning("Key found but looks invalid or empty")
+
+    else:
+
+        st.sidebar.error('"GOOGLE_API_KEY" not found in secrets')
+
+else:
+
+    st.sidebar.error("No secrets loaded at all! 😱 Check Streamlit settings or .streamlit/secrets.toml")
+
+# Stop if no valid key
+
+if not api_key:
+
+    st.error("⚠️ No valid GOOGLE_API_KEY found.")
+
+    st.info("""
+
+    To fix:
+
+    1. Go to app Settings → Secrets
+
+    2. Add exactly: GOOGLE_API_KEY = "your-key-here"
+
+    3. Save and Reboot
+
+    OR create .streamlit/secrets.toml in your GitHub repo with the same line.
+
+    """)
 
     st.stop()
 
-genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
+# Configure Gemini
 
-# Model (use flash for speed/cost, or pro for better quality)
+genai.configure(api_key=api_key)
 
-MODEL_NAME = "gemini-1.5-flash"  # or "gemini-1.5-pro"
+# Model
 
-# Load glossary (persistent across sessions via session_state or file if needed)
+MODEL_NAME = "gemini-1.5-flash"  # Fast & cheap. Change to "gemini-1.5-pro" for better quality
+
+# Glossary (saved in session)
 
 if "glossary" not in st.session_state:
 
-    st.session_state.glossary = {}  # {english: lao} or bidirectional
+    st.session_state.glossary = {}
 
-# --- Sidebar ---
+# --- Sidebar Controls ---
 
 with st.sidebar:
 
-    st.header("Direction")
+    st.header("Translation Direction")
 
-    direction = st.radio("Translate direction", options=["English → Lao", "Lao → English"], index=0)
+    direction = st.radio("", options=["English → Lao", "Lao → English"], index=0)
 
-    st.header("Active glossary")
-
-    st.write(f"{len(st.session_state.glossary)} terms")
+    st.header(f"Active Glossary ({len(st.session_state.glossary)} terms)")
 
     if st.session_state.glossary:
 
@@ -54,37 +96,43 @@ with st.sidebar:
 
             st.write(f"**{eng}** → **{lao}**")
 
-# Tabs
+    else:
+
+        st.info("No terms saved yet")
+
+# --- Tabs ---
 
 tab1, tab2 = st.tabs(["Translate Text", "Translate File"])
 
-# --- Helper functions ---
+# --- Helper: Apply Glossary ---
 
-def apply_glossary(text, glossary, src_lang):
+def apply_glossary(text, src_is_english):
 
-    """Simple replacement using glossary (case insensitive for English)"""
+    if src_is_english:
 
-    if src_lang == "en":
+        for eng, lao in st.session_state.glossary.items():
 
-        for eng, lao in glossary.items():
+            text = text.replace(eng, lao)
 
-            text = text.replace(eng.lower(), lao).replace(eng.title(), lao).replace(eng.upper(), lao)
+            text = text.replace(eng.lower(), lao)
+
+            text = text.replace(eng.title(), lao)
 
     else:
 
-        for eng, lao in glossary.items():
+        for eng, lao in st.session_state.glossary.items():
 
             text = text.replace(lao, eng)
 
     return text
 
+# --- Helper: Translate with Retry ---
+
 def translate_with_retry(prompt):
 
-    """Translate with retry on ResourceExhausted (429 quota)"""
+    max_retries = 6
 
-    max_retries = 5
-
-    retry_delay = 5  # start with 5 seconds
+    delay = 5
 
     for attempt in range(max_retries):
 
@@ -96,23 +144,25 @@ def translate_with_retry(prompt):
 
             return response.text.strip()
 
-        except ResourceExhausted as e:
+        except ResourceExhausted:
 
             if attempt == max_retries - 1:
 
-                raise e  # final fail
+                raise
 
-            st.warning(f"Rate limit hit (attempt {attempt+1}/{max_retries}). Retrying in {retry_delay} seconds...")
+            st.warning(f"Rate limit hit. Retrying in {delay}s... ({attempt+1}/{max_retries})")
 
-            time.sleep(retry_delay)
+            time.sleep(delay)
 
-            retry_delay *= 2  # exponential backoff
+            delay *= 2
 
         except Exception as e:
 
-            st.error(f"Unexpected error: {str(e)}")
+            st.error(f"API Error: {str(e)}")
 
-            return "[Translation failed – try later]"
+            return None
+
+    return None
 
 # --- Text Translation Tab ---
 
@@ -120,9 +170,9 @@ with tab1:
 
     st.write("Enter text to translate")
 
-    user_text = st.text_area("", placeholder="Type or paste text here...", height=150)
+    user_text = st.text_area("", placeholder="Type or paste here...", height=150, label_visibility="collapsed")
 
-    if st.button("Translate Text"):
+    if st.button("Translate Text", type="primary"):
 
         if not user_text.strip():
 
@@ -132,19 +182,15 @@ with tab1:
 
             with st.spinner("Translating..."):
 
-                # Determine languages
+                src = "English" if direction == "English → Lao" else "Lao"
 
-                src_lang = "en" if direction == "English → Lao" else "lo"
-
-                target_lang = "Lao" if direction == "English → Lao" else "English"
-
-                # Build prompt
+                target = "Lao" if direction == "English → Lao" else "English"
 
                 prompt = f"""
 
-                Translate the following text from {src_lang.upper()} to {target_lang}:
+                Translate only the text below from {src} to {target}.
 
-                Only output the translation, nothing else.
+                Output ONLY the translation, no explanations.
 
                 Text: "{user_text}"
 
@@ -154,29 +200,35 @@ with tab1:
 
                     translation = translate_with_retry(prompt)
 
-                    # Apply glossary after translation
+                    if translation:
 
-                    translation = apply_glossary(translation, st.session_state.glossary, src_lang)
+                        # Apply custom glossary
 
-                    st.success("Translation:")
+                        translation = apply_glossary(translation, direction == "English → Lao")
 
-                    st.markdown(f"**{translation}**")
+                        st.success("Translation:")
+
+                        st.markdown(f"**{translation}**")
+
+                    else:
+
+                        st.error("[Translation failed – try later]")
 
                 except ResourceExhausted:
 
-                    st.error("Translation timed out after retries — rate limit delay in Tier 1. Try again in 5 minutes.")
+                    st.error("Translation timed out – rate limit in Tier 1.")
 
-                    st.info("If this persists even after billing, submit a quota increase request in Google Cloud Console > Quotas > Generative Language API.")
+                    st.info("Submit a quota increase in Google Cloud Console → Quotas → Generative Language API to unlock higher limits.")
 
-                except Exception:
+                except Exception as e:
 
-                    st.error("[Translation failed – try later]")
+                    st.error(f"Unexpected error: {e}")
 
-# --- Teach new term ---
+# --- Teach New Term ---
 
 st.divider()
 
-new_term = st.text_input("➕ Teach Johnny a new term (saved forever)")
+st.subheader("➕ Teach Johnny a new term (saved forever)")
 
 col1, col2 = st.columns(2)
 
@@ -188,25 +240,28 @@ with col2:
 
     lao_term = st.text_input("Lao term (ພາສາລາວ)")
 
-if st.button("Save term to glossary"):
+if st.button("Save to glossary"):
 
-    if eng_term and lao_term:
+    if eng_term.strip() and lao_term.strip():
 
         st.session_state.glossary[eng_term.strip()] = lao_term.strip()
 
-        st.success(f"Saved: {eng_term} → {lao_term}")
+        st.success(f"Saved: **{eng_term.strip()}** → **{lao_term.strip()}**")
 
         st.rerun()
 
     else:
 
-        st.warning("Enter both terms.")
+        st.warning("Please fill both fields.")
 
-# --- File tab placeholder (expand later if needed) ---
+# --- File Tab (Placeholder) ---
 
 with tab2:
 
-    st.info("File translation coming soon! For now, use Text tab.")
+    st.info("File upload translation coming soon! Use Text tab for now.")
 
-st.caption("Johnny uses Gemini API. Glossary improvements are user-powered. 🚀")
+# --- Footer ---
+
+st.caption("Johnny uses Google Gemini API • Glossary is user-powered • Made with ❤️ for Lao speakers")
+For Sale Page
  
