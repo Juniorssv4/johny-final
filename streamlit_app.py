@@ -6,7 +6,7 @@ from io import BytesIO
 from docx import Document
 from openpyxl import load_workbook
 from pptx import Presentation
-from tenacity import retry, stop_after_attempt, wait_exponential
+from tenacity import retry, stop_after_attempt, wait_exponential, RetryError
 
 # GEMINI — PERFECT LAO + EXPONENTIAL BACKOFF RETRY
 try:
@@ -66,9 +66,12 @@ Text: {text}"""
     try:
         response = safe_generate_content(prompt)
         return response.text.strip()
+    except RetryError:
+        st.error("Translation timed out after retries — rate limit delay in Tier 1. Try again in 5 minutes.")
+        return "[Translation failed — try later]"
     except Exception as e:
-        st.toast(f"Rate limit hit — retrying automatically...")
-        raise  # Let tenacity handle retry
+        st.error(f"API error: {str(e)}")
+        return "[Translation failed — try again]"
 
 # UI
 st.set_page_config(page_title="Johny", page_icon="🇱🇦", layout="centered")
