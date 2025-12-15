@@ -70,9 +70,9 @@ if not api_key:
 
 genai.configure(api_key=api_key)
 
-# Model
+# Model - UPDATED TO CURRENT 2025 MODEL
 
-MODEL_NAME = "gemini-1.5-flash"  # Fast & cheap. Change to "gemini-1.5-pro" for better quality
+MODEL_NAME = "gemini-2.5-flash"  # Latest fast model (replaces old gemini-1.5-flash)
 
 # Glossary (saved in session)
 
@@ -262,5 +262,6 @@ with tab2:
 
 # --- Footer ---
 
-st.caption("Johnny uses Google Gemini API • Glossary is user-powered • Made with ❤️ for Lao speakers")
+st.caption("Johnny is made with ❤️ for everyone")
+
  
