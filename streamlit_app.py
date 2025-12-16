@@ -10,7 +10,7 @@ from tenacity import retry, stop_after_attempt, wait_exponential, RetryError
 
 # GEMINI CONFIG
 try:
-    genai.configure(api_key=st.secrets["GEMINI_API_KEY"])  # Fixed key name
+    genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
     model = genai.GenerativeModel("gemini-2.5-flash")
 except:
     st.error("Add GEMINI_API_KEY in Secrets")
@@ -24,7 +24,7 @@ except:
 def safe_generate_content(prompt):
     return model.generate_content(prompt)
 
-# Persistent Glossary (saved forever in DB)
+# Persistent Glossary
 conn = sqlite3.connect("glossary.db", check_same_thread=False)
 c = conn.cursor()
 c.execute('''CREATE TABLE IF NOT EXISTS glossary (english TEXT PRIMARY KEY, lao TEXT)''')
