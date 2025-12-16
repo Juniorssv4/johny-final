@@ -11,10 +11,19 @@ from tenacity import retry, stop_after_attempt, wait_exponential, RetryError
 # GEMINI CONFIG
 try:
     genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-    model = genai.GenerativeModel("gemini-2.5-flash")
 except:
     st.error("Add GEMINI_API_KEY in Secrets")
     st.stop()
+
+# Primary and fallback models
+PRIMARY_MODEL = "gemini-2.5-flash"
+FALLBACK_MODEL = "gemini-1.5-flash"
+
+# Current model (session state)
+if "current_model" not in st.session_state:
+    st.session_state.current_model = PRIMARY_MODEL
+
+model = genai.GenerativeModel(st.session_state.current_model)
 
 # Backoff for rate limits
 @retry(
@@ -58,8 +67,19 @@ Text: {text}"""
     try:
         response = safe_generate_content(prompt)
         return response.text.strip()
-    except RetryError:
-        st.error("Timed out after retries — rate limit delay. Try again in 5 minutes.")
+    except RetryError as e:
+        # Check if quota error caused timeout
+        if "429" in str(e.last_attempt.exception()) or "quota" in str(e.last_attempt.exception()).lower():
+            if st.session_state.current_model == PRIMARY_MODEL:
+                st.session_state.current_model = FALLBACK_MODEL
+                st.info("Rate limit on gemini-2.5-flash — switching to gemini-1.5-flash for remaining translation.")
+                # Recreate model with fallback
+                global model
+                model = genai.GenerativeModel(FALLBACK_MODEL)
+                # Retry with fallback
+                response = model.generate_content(prompt)
+                return response.text.strip()
+        st.error("Timed out after retries — try again in 5 minutes.")
         return "[Failed — try later]"
     except Exception as e:
         st.error(f"API error: {str(e)}")
@@ -162,8 +182,19 @@ with tab2:
                     prs.save(output)
 
                 output.seek(0)
-                st.success("File translated!")
-                st.download_button("Download Translated File", output, f"TRANSLATED_{uploaded_file.name}")
+                st.success("File translated perfectly!")
+
+                # Auto-download
+                st.download_button(
+                    label="Download Translated File Now",
+                    data=output,
+                    file_name=f"TRANSLATED_{uploaded_file.name}",
+                    mime="application/octet-stream",
+                    type="primary"
+                )
+
+                # Force download feel
+                st.rerun()  # Optional: refresh to show button prominently
 
 # Teach term
 with st.expander("➕ Teach Johny a new term (saved forever)"):
@@ -176,4 +207,4 @@ with st.expander("➕ Teach Johny a new term (saved forever)"):
             st.success("Saved!")
             st.rerun()
 
-st.caption(f"Active glossary: {len(glossary)} terms")
+st.caption(f"Active glossary: {len(glossary)} terms • Model: {st.session_state.current_model}")
