@@ -32,7 +32,7 @@ model = genai.GenerativeModel(st.session_state.current_model)
 def safe_generate_content(prompt):
     return model.generate_content(prompt)
 
-# Persistent Glossary — saved forever in DB
+# Persistent Glossary
 conn = sqlite3.connect("glossary.db", check_same_thread=False)
 c = conn.cursor()
 c.execute('''CREATE TABLE IF NOT EXISTS glossary (english TEXT PRIMARY KEY, lao TEXT)''')
@@ -46,7 +46,7 @@ def save_term(english, lao):
     c.execute("INSERT OR REPLACE INTO glossary VALUES (?, ?)", (english.lower(), lao))
     conn.commit()
 
-# Load glossary every run (forever saved)
+# Load glossary every run
 if "glossary" not in st.session_state:
     st.session_state.glossary = load_glossary()
 
@@ -87,7 +87,7 @@ Text: {text}"""
 
 # UI
 st.set_page_config(page_title="Johny", page_icon="🇱🇦", layout="centered")
-st.title("Johny — NPA Lao Translator")
+st.title("😊 Johny — NPA Lao Translator")  # Happy face added!
 
 direction = st.radio("Direction", ["English → Lao", "Lao → English"], horizontal=True)
 
@@ -202,7 +202,7 @@ with st.expander("➕ Teach Johny a new term (saved forever)"):
     if st.button("Save"):
         if eng.strip() and lao.strip():
             save_term(eng.strip(), lao.strip())
-            st.session_state.glossary = load_glossary()  # Reload
+            st.session_state.glossary = load_glossary()
             st.success("Saved forever!")
             st.rerun()
 
