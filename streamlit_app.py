@@ -19,13 +19,12 @@ except:
 PRIMARY_MODEL = "gemini-2.5-flash"
 FALLBACK_MODEL = "gemini-1.5-flash"
 
-# Current model (session state)
 if "current_model" not in st.session_state:
     st.session_state.current_model = PRIMARY_MODEL
 
 model = genai.GenerativeModel(st.session_state.current_model)
 
-# Backoff for rate limits
+# Backoff
 @retry(
     stop=stop_after_attempt(6),
     wait=wait_exponential(multiplier=1, min=4, max=60)
@@ -68,15 +67,12 @@ Text: {text}"""
         response = safe_generate_content(prompt)
         return response.text.strip()
     except RetryError as e:
-        # Check if quota error caused timeout
         if "429" in str(e.last_attempt.exception()) or "quota" in str(e.last_attempt.exception()).lower():
             if st.session_state.current_model == PRIMARY_MODEL:
                 st.session_state.current_model = FALLBACK_MODEL
-                st.info("Rate limit on gemini-2.5-flash — switching to gemini-1.5-flash for remaining translation.")
-                # Recreate model with fallback
+                st.info("Rate limit on gemini-2.5-flash — switched to gemini-1.5-flash for remaining translation.")
                 global model
                 model = genai.GenerativeModel(FALLBACK_MODEL)
-                # Retry with fallback
                 response = model.generate_content(prompt)
                 return response.text.strip()
         st.error("Timed out after retries — try again in 5 minutes.")
@@ -112,7 +108,8 @@ with tab2:
         if st.button("Translate File", type="primary"):
             with st.spinner("Translating file..."):
                 file_bytes = uploaded_file.read()
-                ext = uploaded_file.name.rsplit(".", 1)[-1].lower()
+                file_name = uploaded_file.name
+                ext = file_name.rsplit(".", 1)[-1].lower()
                 output = BytesIO()
 
                 total_elements = 0
@@ -173,7 +170,7 @@ with tab2:
                     translated_count += 1
                     progress_bar.progress(translated_count / total_elements)
 
-                status_text.text("Saving file...")
+                status_text.text("Saving translated file...")
                 if ext == "docx":
                     doc.save(output)
                 elif ext == "xlsx":
@@ -182,26 +179,30 @@ with tab2:
                     prs.save(output)
 
                 output.seek(0)
+
+                # Store output in session state for download
+                st.session_state.translated_output = output
+                st.session_state.translated_filename = f"TRANSLATED_{file_name}"
+
                 st.success("File translated perfectly!")
 
-                # Auto-download
-                st.download_button(
-                    label="Download Translated File Now",
-                    data=output,
-                    file_name=f"TRANSLATED_{uploaded_file.name}",
-                    mime="application/octet-stream",
-                    type="primary"
-                )
-
-                # Force download feel
-                st.rerun()  # Optional: refresh to show button prominently
+# Clear download button outside the button block
+if "translated_output" in st.session_state:
+    st.download_button(
+        label="📥 Download Translated File",
+        data=st.session_state.translated_output,
+        file_name=st.session_state.translated_filename,
+        mime="application/octet-stream",
+        type="primary",
+        use_container_width=True
+    )
 
 # Teach term
-with st.expander("➕ Teach Johny a new term (saved forever)"):
+with st.expander("➕ Teach Johny a new term (saved forever)", expanded=False):
     c1, c2 = st.columns(2)
-    with c1: eng = st.text_input("English")
-    with c2: lao = st.text_input("Lao")
-    if st.button("Save"):
+    with c1: eng = st.text_input("English term")
+    with c2: lao = st.text_input("Lao term")
+    if st.button("Save term"):
         if eng.strip() and lao.strip():
             save_term(eng.strip(), lao.strip())
             st.success("Saved!")
