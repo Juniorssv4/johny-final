@@ -32,7 +32,7 @@ model = genai.GenerativeModel(st.session_state.current_model)
 def safe_generate_content(prompt):
     return model.generate_content(prompt)
 
-# Persistent Glossary
+# Persistent Glossary — saved forever in DB
 conn = sqlite3.connect("glossary.db", check_same_thread=False)
 c = conn.cursor()
 c.execute('''CREATE TABLE IF NOT EXISTS glossary (english TEXT PRIMARY KEY, lao TEXT)''')
@@ -46,7 +46,11 @@ def save_term(english, lao):
     c.execute("INSERT OR REPLACE INTO glossary VALUES (?, ?)", (english.lower(), lao))
     conn.commit()
 
-glossary = load_glossary()
+# Load glossary every run (forever saved)
+if "glossary" not in st.session_state:
+    st.session_state.glossary = load_glossary()
+
+glossary = st.session_state.glossary
 
 def get_glossary_prompt():
     if glossary:
@@ -70,7 +74,7 @@ Text: {text}"""
         if "429" in str(e.last_attempt.exception()) or "quota" in str(e.last_attempt.exception()).lower():
             if st.session_state.current_model == PRIMARY_MODEL:
                 st.session_state.current_model = FALLBACK_MODEL
-                st.info("Rate limit on gemini-2.5-flash — switched to gemini-1.5-flash for remaining translation.")
+                st.info("Rate limit on gemini-2.5-flash — switched to gemini-1.5-flash.")
                 global model
                 model = genai.GenerativeModel(FALLBACK_MODEL)
                 response = model.generate_content(prompt)
@@ -170,7 +174,7 @@ with tab2:
                     translated_count += 1
                     progress_bar.progress(translated_count / total_elements)
 
-                status_text.text("Saving translated file...")
+                status_text.text("Saving file...")
                 if ext == "docx":
                     doc.save(output)
                 elif ext == "xlsx":
@@ -179,33 +183,27 @@ with tab2:
                     prs.save(output)
 
                 output.seek(0)
-
-                # Store output in session state for download
-                st.session_state.translated_output = output
-                st.session_state.translated_filename = f"TRANSLATED_{file_name}"
-
                 st.success("File translated perfectly!")
 
-# Clear download button outside the button block
-if "translated_output" in st.session_state:
-    st.download_button(
-        label="📥 Download Translated File",
-        data=st.session_state.translated_output,
-        file_name=st.session_state.translated_filename,
-        mime="application/octet-stream",
-        type="primary",
-        use_container_width=True
-    )
+                st.download_button(
+                    label="📥 Download Translated File",
+                    data=output,
+                    file_name=f"TRANSLATED_{file_name}",
+                    mime="application/octet-stream",
+                    type="primary",
+                    use_container_width=True
+                )
 
 # Teach term
-with st.expander("➕ Teach Johny a new term (saved forever)", expanded=False):
+with st.expander("➕ Teach Johny a new term (saved forever)"):
     c1, c2 = st.columns(2)
-    with c1: eng = st.text_input("English term")
-    with c2: lao = st.text_input("Lao term")
-    if st.button("Save term"):
+    with c1: eng = st.text_input("English")
+    with c2: lao = st.text_input("Lao")
+    if st.button("Save"):
         if eng.strip() and lao.strip():
             save_term(eng.strip(), lao.strip())
-            st.success("Saved!")
+            st.session_state.glossary = load_glossary()  # Reload
+            st.success("Saved forever!")
             st.rerun()
 
 st.caption(f"Active glossary: {len(glossary)} terms • Model: {st.session_state.current_model}")
