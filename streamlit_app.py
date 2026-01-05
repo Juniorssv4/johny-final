@@ -46,7 +46,7 @@ def save_term(english, lao):
     c.execute("INSERT OR REPLACE INTO glossary VALUES (?, ?)", (english.lower(), lao))
     conn.commit()
 
-# Load glossary every run
+# Load glossary every run (saved forever)
 if "glossary" not in st.session_state:
     st.session_state.glossary = load_glossary()
 
@@ -86,8 +86,12 @@ Text: {text}"""
         return "[Failed — try again]"
 
 # UI
-st.set_page_config(page_title="Johny", page_icon="🇱🇦", layout="centered")
-st.title("😊 Johny — NPA Lao Translator")  # Happy face added!
+st.set_page_config(
+    page_title="Johny",
+    page_icon="https://raw.githubusercontent.com/Juniorssv4/johny-final/main/Johny.png",
+    layout="centered"
+)
+st.title("😊 Johny — NPA Lao Translator")
 
 direction = st.radio("Direction", ["English → Lao", "Lao → English"], horizontal=True)
 
