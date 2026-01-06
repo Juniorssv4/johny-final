@@ -32,8 +32,9 @@ model = genai.GenerativeModel(st.session_state.current_model)
 def safe_generate_content(prompt):
     return model.generate_content(prompt)
 
-# Persistent Glossary
-conn = sqlite3.connect("glossary.db", check_same_thread=False)
+# Persistent Glossary — saved forever in shared storage
+DB_PATH = "/mount/src/glossary.db"  # Persistent path on Streamlit Cloud
+conn = sqlite3.connect(DB_PATH, check_same_thread=False)
 c = conn.cursor()
 c.execute('''CREATE TABLE IF NOT EXISTS glossary (english TEXT PRIMARY KEY, lao TEXT)''')
 conn.commit()
