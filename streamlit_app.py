@@ -1,7 +1,6 @@
 import streamlit as st
 import time
 import google.generativeai as genai
-import sqlite3
 from io import BytesIO
 from docx import Document
 from openpyxl import load_workbook
@@ -32,26 +31,28 @@ model = genai.GenerativeModel(st.session_state.current_model)
 def safe_generate_content(prompt):
     return model.generate_content(prompt)
 
-# Persistent Glossary — saved forever in shared storage
-DB_PATH = "/mount/src/glossary.db"  # Persistent path on Streamlit Cloud
-conn = sqlite3.connect(DB_PATH, check_same_thread=False)
-c = conn.cursor()
-c.execute('''CREATE TABLE IF NOT EXISTS glossary (english TEXT PRIMARY KEY, lao TEXT)''')
-conn.commit()
+# Persistent Glossary — saved forever in repo file
+GLOSSARY_FILE = "glossary.txt"
 
-def load_glossary():
-    c.execute("SELECT english, lao FROM glossary")
-    return dict(c.fetchall())
-
-def save_term(english, lao):
-    c.execute("INSERT OR REPLACE INTO glossary VALUES (?, ?)", (english.lower(), lao))
-    conn.commit()
-
-# Load glossary every run (saved forever)
 if "glossary" not in st.session_state:
-    st.session_state.glossary = load_glossary()
+    try:
+        with open(GLOSSARY_FILE, "r") as f:
+            lines = f.readlines()
+        glossary_dict = {}
+        for line in lines:
+            if ":" in line:
+                eng, lao = line.strip().split(":", 1)
+                glossary_dict[eng.strip().lower()] = lao.strip()
+        st.session_state.glossary = glossary_dict
+    except FileNotFoundError:
+        st.session_state.glossary = {}
 
 glossary = st.session_state.glossary
+
+def save_glossary():
+    with open(GLOSSARY_FILE, "w") as f:
+        for eng, lao in glossary.items():
+            f.write(f"{eng}:{lao}\n")
 
 def get_glossary_prompt():
     if glossary:
@@ -206,8 +207,8 @@ with st.expander("➕ Teach Johny a new term (saved forever)"):
     with c2: lao = st.text_input("Lao")
     if st.button("Save"):
         if eng.strip() and lao.strip():
-            save_term(eng.strip(), lao.strip())
-            st.session_state.glossary = load_glossary()
+            glossary[eng.strip().lower()] = lao.strip()
+            save_glossary()
             st.success("Saved forever!")
             st.rerun()
 
