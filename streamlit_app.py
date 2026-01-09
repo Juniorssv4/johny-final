@@ -84,33 +84,45 @@ Text: {text}"""
         st.error(f"API error: {str(e)}")
         return "[Failed — try again]"
 
-# Better Lao to English phonetic (for expats to read/pronounce)
-LAO_TO_PHONETIC = {
-    "ກ": "k", "ຂ": "kh", "ຄ": "kh", "ງ": "ng",
-    "ຈ": "j", "ສ": "s", "ຊ": "s", "ຍ": "ny",
-    "ດ": "d", "ຕ": "t", "ຖ": "th", "ທ": "th", "ນ": "n",
-    "ບ": "b", "ປ": "p", "ຜ": "ph", "ຝ": "f", "ພ": "ph", "ຟ": "f", "ມ": "m",
-    "ຢ": "y", "ຣ": "r", "ລ": "l", "ວ": "w",
-    "ຫ": "h", "ອ": "", "ຮ": "h",
-    "ະ": "a", "າ": "a", "ິ": "i", "ີ": "i", "ຸ": "u", "ູ": "u",
-    "ເ": "e", "ແ": "ae", "ໂ": "o", "ໃ": "ai", "ໄ": "ai",
-    "ົ": "o", "ຽ": "ia",
-    # Tone marks (simplified)
-    "່": "`", "້": "^", "໊": "~", "໋": "´",
-}
-
+# Readable English phonetic for expats (syllable-based, common words)
 def lao_to_phonetic(lao_text):
-    phonetic = ""
-    i = 0
-    while i < len(lao_text):
-        char = lao_text[i]
-        if char in LAO_TO_PHONETIC:
-            phonetic += LAO_TO_PHONETIC[char]
-        else:
-            phonetic += char
-        i += 1
-    # Simple cleanup
-    phonetic = phonetic.replace("o`", "o").replace("a^", "a").replace("ai`", "ai").replace("ao^", "ao")
+    # Common word replacements for accurate pronunciation
+    replacements = {
+        "ສະບາຍດີ": "sa-bai-dee",
+        "ຂອບໃຈ": "khop-jai",
+        "ບໍ່": "bo",
+        "ແມ່ນ": "maen",
+        "ໃຫຍ່": "nyai",
+        "ນ້ອຍ": "noy",
+        "ຂ້ອຍ": "khoy",
+        "ເຈົ້າ": "jao",
+        "ທີ່": "tee",
+        "ແລະ": "lae",
+        "ກັບ": "kap",
+        "ໃນ": "nai",
+        "ຂອງ": "khong",
+    }
+    phonetic = lao_text
+    for lao, phon in replacements.items():
+        phonetic = phonetic.replace(lao, phon)
+
+    # Fallback simple mapping for unknown
+    simple_map = {
+        "ກ": "k", "ຂ": "kh", "ຄ": "kh", "ງ": "ng",
+        "ຈ": "j", "ສ": "s", "ຊ": "s", "ຍ": "ny",
+        "ດ": "d", "ຕ": "t", "ຖ": "th", "ທ": "th", "ນ": "n",
+        "ບ": "b", "ປ": "p", "ຜ": "ph", "ຝ": "f", "ພ": "ph", "ຟ": "f", "ມ": "m",
+        "ຢ": "y", "ຣ": "r", "ລ": "l", "ວ": "w",
+        "ຫ": "h", "ອ": "o", "ຮ": "h",
+        "ະ": "a", "າ": "a", "ິ": "i", "ີ": "i", "ຸ": "u", "ູ": "u",
+        "ເ": "e", "ແ": "ae", "ໂ": "o", "ໃ": "ai", "ໄ": "ai",
+    }
+    for char, phon in simple_map.items():
+        phonetic = phonetic.replace(char, phon)
+
+    # Clean up and add hyphens for readability
+    phonetic = phonetic.replace(" ", "-")
+    phonetic = "-".join([s for s in phonetic.split("-") if s])
     return phonetic.lower()
 
 # UI
@@ -133,7 +145,7 @@ with tab1:
             if translation and translation != "[Failed — try later]":
                 if direction == "English → Lao":
                     phonetic = lao_to_phonetic(translation)
-                    st.success("Pronunciation (for expats):")
+                    st.success("Pronunciation (easy for expats):")
                     st.markdown(f"**{phonetic}**")
                     st.success("Lao script:")
                     st.markdown(f"**{translation}**")
