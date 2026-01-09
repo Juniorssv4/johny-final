@@ -24,7 +24,7 @@ if "current_model" not in st.session_state:
 
 model = genai.GenerativeModel(st.session_state.current_model)
 
-# Backoff
+# Backoff for rate limits
 @retry(
     stop=stop_after_attempt(6),
     wait=wait_exponential(multiplier=1, min=4, max=60)
@@ -84,47 +84,6 @@ Text: {text}"""
         st.error(f"API error: {str(e)}")
         return "[Failed — try again]"
 
-# Readable English phonetic for expats (syllable-based, common words)
-def lao_to_phonetic(lao_text):
-    # Common word replacements for accurate pronunciation
-    replacements = {
-        "ສະບາຍດີ": "sa-bai-dee",
-        "ຂອບໃຈ": "khop-jai",
-        "ບໍ່": "bo",
-        "ແມ່ນ": "maen",
-        "ໃຫຍ່": "nyai",
-        "ນ້ອຍ": "noy",
-        "ຂ້ອຍ": "khoy",
-        "ເຈົ້າ": "jao",
-        "ທີ່": "tee",
-        "ແລະ": "lae",
-        "ກັບ": "kap",
-        "ໃນ": "nai",
-        "ຂອງ": "khong",
-    }
-    phonetic = lao_text
-    for lao, phon in replacements.items():
-        phonetic = phonetic.replace(lao, phon)
-
-    # Fallback simple mapping for unknown
-    simple_map = {
-        "ກ": "k", "ຂ": "kh", "ຄ": "kh", "ງ": "ng",
-        "ຈ": "j", "ສ": "s", "ຊ": "s", "ຍ": "ny",
-        "ດ": "d", "ຕ": "t", "ຖ": "th", "ທ": "th", "ນ": "n",
-        "ບ": "b", "ປ": "p", "ຜ": "ph", "ຝ": "f", "ພ": "ph", "ຟ": "f", "ມ": "m",
-        "ຢ": "y", "ຣ": "r", "ລ": "l", "ວ": "w",
-        "ຫ": "h", "ອ": "o", "ຮ": "h",
-        "ະ": "a", "າ": "a", "ິ": "i", "ີ": "i", "ຸ": "u", "ູ": "u",
-        "ເ": "e", "ແ": "ae", "ໂ": "o", "ໃ": "ai", "ໄ": "ai",
-    }
-    for char, phon in simple_map.items():
-        phonetic = phonetic.replace(char, phon)
-
-    # Clean up and add hyphens for readability
-    phonetic = phonetic.replace(" ", "-")
-    phonetic = "-".join([s for s in phonetic.split("-") if s])
-    return phonetic.lower()
-
 # UI
 st.set_page_config(
     page_title="Johny",
@@ -143,15 +102,8 @@ with tab1:
         with st.spinner("Translating..."):
             translation = translate_text(text, direction)
             if translation and translation != "[Failed — try later]":
-                if direction == "English → Lao":
-                    phonetic = lao_to_phonetic(translation)
-                    st.success("Pronunciation (easy for expats):")
-                    st.markdown(f"**{phonetic}**")
-                    st.success("Lao script:")
-                    st.markdown(f"**{translation}**")
-                else:
-                    st.success("Translation:")
-                    st.markdown(f"**{translation}**")
+                st.success("Translation:")
+                st.markdown(f"**{translation}**")
             else:
                 st.error(translation or "Translation failed")
 
