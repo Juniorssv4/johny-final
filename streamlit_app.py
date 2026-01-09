@@ -1,6 +1,7 @@
 import streamlit as st
 import time
 import google.generativeai as genai
+import requests
 from io import BytesIO
 from docx import Document
 from openpyxl import load_workbook
@@ -31,46 +32,18 @@ model = genai.GenerativeModel(st.session_state.current_model)
 def safe_generate_content(prompt):
     return model.generate_content(prompt)
 
-# Better Lao to English phonetic (Romanization for expats)
-LAO_TO_PHONETIC = {
-    # Consonants
-    "ກ": "k", "ຂ": "kh", "ຄ": "kh", "ງ": "ng",
-    "ຈ": "ch", "ສ": "s", "ຊ": "s", "ຍ": "ny",
-    "ດ": "d", "ຕ": "t", "ຖ": "th", "ທ": "th", "ນ": "n",
-    "ບ": "b", "ປ": "p", "ຜ": "ph", "ຝ": "f", "ພ": "ph", "ຟ": "f", "ມ": "m",
-    "ຢ": "y", "ຣ": "r", "ລ": "l", "ວ": "w",
-    "ຫ": "h", "ອ": "ʔ", "ຮ": "h",
-    # Vowels
-    "ະ": "a", "າ": "aa", "ິ": "i", "ີ": "ii", "ຸ": "u", "ູ": "uu",
-    "ເ": "e", "ແ": "ae", "ໂ": "o", "ໃ": "ai", "ໄ": "ai",
-    "ເີ": "oe", "ເົາ": "ao", "ຽ": "ia",
-    # Tones (simplified - can expand)
-    # Note: Tone marks are complex; this is basic syllable romanization
-}
-
-def lao_to_phonetic(lao_text):
-    phonetic = ""
-    i = 0
-    while i < len(lao_text):
-        char = lao_text[i]
-        if char in LAO_TO_PHONETIC:
-            phonetic += LAO_TO_PHONETIC[char]
-        else:
-            phonetic += char  # Keep unknown
-        i += 1
-    return phonetic.lower()  # Lowercase for readability
-
-# Glossary from repo file
+# Glossary from repo file (manual edit in GitHub)
 if "glossary" not in st.session_state:
     try:
-        import requests
         raw_url = "https://raw.githubusercontent.com/Juniorssv4/johny-final/main/glossary.txt"
         response = requests.get(raw_url)
+        response.raise_for_status()
         lines = response.text.splitlines()
         glossary_dict = {}
         for line in lines:
-            if ":" in line:
-                eng, lao = line.strip().split(":", 1)
+            line = line.strip()
+            if line and ":" in line:
+                eng, lao = line.split(":", 1)
                 glossary_dict[eng.strip().lower()] = lao.strip()
         st.session_state.glossary = glossary_dict
     except:
@@ -111,6 +84,35 @@ Text: {text}"""
         st.error(f"API error: {str(e)}")
         return "[Failed — try again]"
 
+# Better Lao to English phonetic (for expats to read/pronounce)
+LAO_TO_PHONETIC = {
+    "ກ": "k", "ຂ": "kh", "ຄ": "kh", "ງ": "ng",
+    "ຈ": "j", "ສ": "s", "ຊ": "s", "ຍ": "ny",
+    "ດ": "d", "ຕ": "t", "ຖ": "th", "ທ": "th", "ນ": "n",
+    "ບ": "b", "ປ": "p", "ຜ": "ph", "ຝ": "f", "ພ": "ph", "ຟ": "f", "ມ": "m",
+    "ຢ": "y", "ຣ": "r", "ລ": "l", "ວ": "w",
+    "ຫ": "h", "ອ": "", "ຮ": "h",
+    "ະ": "a", "າ": "a", "ິ": "i", "ີ": "i", "ຸ": "u", "ູ": "u",
+    "ເ": "e", "ແ": "ae", "ໂ": "o", "ໃ": "ai", "ໄ": "ai",
+    "ົ": "o", "ຽ": "ia",
+    # Tone marks (simplified)
+    "່": "`", "້": "^", "໊": "~", "໋": "´",
+}
+
+def lao_to_phonetic(lao_text):
+    phonetic = ""
+    i = 0
+    while i < len(lao_text):
+        char = lao_text[i]
+        if char in LAO_TO_PHONETIC:
+            phonetic += LAO_TO_PHONETIC[char]
+        else:
+            phonetic += char
+        i += 1
+    # Simple cleanup
+    phonetic = phonetic.replace("o`", "o").replace("a^", "a").replace("ai`", "ai").replace("ao^", "ao")
+    return phonetic.lower()
+
 # UI
 st.set_page_config(
     page_title="Johny",
@@ -142,14 +144,101 @@ with tab1:
                 st.error(translation or "Translation failed")
 
 with tab2:
-    # Your file translation code (no phonetic)
     uploaded_file = st.file_uploader("Upload DOCX • XLSX • PPTX (max 10MB)", type=["docx", "xlsx", "pptx"])
 
     if uploaded_file:
-        # ... (your full file translation code here — same as before)
+        if uploaded_file.size > 10 * 1024 * 1024:
+            st.error("File too large! Max 10MB.")
+            st.stop()
 
-# Teach term
+        if st.button("Translate File", type="primary"):
+            with st.spinner("Translating file..."):
+                file_bytes = uploaded_file.read()
+                file_name = uploaded_file.name
+                ext = file_name.rsplit(".", 1)[-1].lower()
+                output = BytesIO()
+
+                total_elements = 0
+                elements_list = []
+
+                if ext == "docx":
+                    doc = Document(BytesIO(file_bytes))
+                    for p in doc.paragraphs:
+                        if p.text.strip():
+                            total_elements += 1
+                            elements_list.append(("para", p))
+                    for table in doc.tables:
+                        for row in table.rows:
+                            for cell in row.cells:
+                                for p in cell.paragraphs:
+                                    if p.text.strip():
+                                        total_elements += 1
+                                        elements_list.append(("para", p))
+
+                elif ext == "xlsx":
+                    wb = load_workbook(BytesIO(file_bytes))
+                    for ws in wb.worksheets:
+                        for row in ws.iter_rows():
+                            for cell in row:
+                                if isinstance(cell.value, str) and cell.value.strip():
+                                    total_elements += 1
+                                    elements_list.append(("cell", cell))
+
+                elif ext == "pptx":
+                    prs = Presentation(BytesIO(file_bytes))
+                    for slide in prs.slides:
+                        for shape in slide.shapes:
+                            if shape.has_text_frame:
+                                for p in shape.text_frame.paragraphs:
+                                    if p.text.strip():
+                                        total_elements += 1
+                                        elements_list.append(("para", p))
+
+                if total_elements == 0:
+                    st.warning("No text found.")
+                    st.stop()
+
+                progress_bar = st.progress(0)
+                status_text = st.empty()
+
+                translated_count = 0
+
+                for element_type, element in elements_list:
+                    status_text.text(f"Translating... {translated_count}/{total_elements}")
+
+                    if element_type == "para":
+                        translated = translate_text(element.text, direction)
+                        element.text = translated
+                    elif element_type == "cell":
+                        translated = translate_text(element.value, direction)
+                        element.value = translated
+
+                    translated_count += 1
+                    progress_bar.progress(translated_count / total_elements)
+
+                status_text.text("Saving file...")
+                if ext == "docx":
+                    doc.save(output)
+                elif ext == "xlsx":
+                    wb.save(output)
+                elif ext == "pptx":
+                    prs.save(output)
+
+                output.seek(0)
+                st.success("File translated perfectly!")
+
+                st.download_button(
+                    label="📥 Download Translated File",
+                    data=output,
+                    file_name=f"TRANSLATED_{file_name}",
+                    mime="application/octet-stream",
+                    type="primary",
+                    use_container_width=True
+                )
+
+# Teach term (manual in GitHub)
 with st.expander("➕ Teach Johny a new term (edit glossary.txt in GitHub)"):
-    st.info("To add term: Edit glossary.txt in repo → add 'english:lao' → save → reboot.")
+    st.info("To add term: Edit glossary.txt in repo → add line 'english:lao' → save → reboot app.")
+    st.code("Example:\nSamir:ສະຫມີຣ\nhello:ສະບາຍດີ")
 
 st.caption(f"Active glossary: {len(glossary)} terms • Model: {st.session_state.current_model}")
