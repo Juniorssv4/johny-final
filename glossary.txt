@@ -4,3 +4,4 @@ task:ສະໜາມ
 CM:ລະເບີດລູກຫວ່ານ
 Cluster Munition:ລະເບີດລູກຫວ່ານ
 demolition:ການທຳລາຍ
+acknowledged:ຊາບ
