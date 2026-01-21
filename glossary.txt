@@ -1,7 +1,8 @@
 Samir:ຊາເມຍ
 QM:ຄຸ້ມຄອງຄຸນນະພາບ
-task:ສະໜາມ
+SS:ຜູ້ນຳພາໜ້າວຽກ
 CM:ລະເບີດລູກຫວ່ານ
 Cluster Munition:ລະເບີດລູກຫວ່ານ
 demolition:ການທຳລາຍ
 acknowledged:ຊາບ
+Laos:ປະເທດລາວ
