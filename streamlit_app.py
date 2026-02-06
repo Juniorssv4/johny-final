@@ -105,14 +105,14 @@ with tab1:
             st.write(result)
 
 with tab2:
-    uploaded_file = st.file_uploader("Upload DOCX • XLSX • PPTX (max 10MB)", type=["docx", "xlsx", "pptx"])
+    # Updated: allow up to 50 MB
+    uploaded_file = st.file_uploader("Upload DOCX • XLSX • PPTX (max 50MB)", type=["docx", "xlsx", "pptx"])
 
     if uploaded_file:
-        if uploaded_file.size > 10 * 1024 * 1024:
-            st.error("File too large! Max 10MB.")
-            st.stop()
-
-        if st.button("Translate File", type="primary"):
+        MAX_SIZE_MB = 50
+        if uploaded_file.size > MAX_SIZE_MB * 1024 * 1024:
+            st.error(f"File too large! Max allowed size is {MAX_SIZE_MB}MB. Your file is {uploaded_file.size / (1024*1024):.1f}MB.")
+        elif st.button("Translate File", type="primary"):
             with st.spinner("Translating file..."):
                 file_bytes = uploaded_file.read()
                 file_name = uploaded_file.name
@@ -156,46 +156,45 @@ with tab2:
                                         elements_list.append(("para", p))
 
                 if total_elements == 0:
-                    st.warning("No text found.")
-                    st.stop()
+                    st.warning("No text found in file.")
+                else:
+                    progress_bar = st.progress(0)
+                    status_text = st.empty()
 
-                progress_bar = st.progress(0)
-                status_text = st.empty()
+                    translated_count = 0
 
-                translated_count = 0
+                    for element_type, element in elements_list:
+                        status_text.text(f"Translating... {translated_count}/{total_elements}")
 
-                for element_type, element in elements_list:
-                    status_text.text(f"Translating... {translated_count}/{total_elements}")
+                        if element_type == "para":
+                            translated = translate_text(element.text, direction)
+                            element.text = translated
+                        elif element_type == "cell":
+                            translated = translate_text(element.value, direction)
+                            element.value = translated
 
-                    if element_type == "para":
-                        translated = translate_text(element.text, direction)
-                        element.text = translated
-                    elif element_type == "cell":
-                        translated = translate_text(element.value, direction)
-                        element.value = translated
+                        translated_count += 1
+                        progress_bar.progress(translated_count / total_elements)
 
-                    translated_count += 1
-                    progress_bar.progress(translated_count / total_elements)
+                    status_text.text("Saving file...")
+                    if ext == "docx":
+                        doc.save(output)
+                    elif ext == "xlsx":
+                        wb.save(output)
+                    elif ext == "pptx":
+                        prs.save(output)
 
-                status_text.text("Saving file...")
-                if ext == "docx":
-                    doc.save(output)
-                elif ext == "xlsx":
-                    wb.save(output)
-                elif ext == "pptx":
-                    prs.save(output)
+                    output.seek(0)
+                    st.success("File translated perfectly!")
 
-                output.seek(0)
-                st.success("File translated perfectly!")
-
-                st.download_button(
-                    label="📥 Download Translated File",
-                    data=output,
-                    file_name=f"TRANSLATED_{file_name}",
-                    mime="application/octet-stream",
-                    type="primary",
-                    use_container_width=True
-                )
+                    st.download_button(
+                        label="📥 Download Translated File",
+                        data=output,
+                        file_name=f"TRANSLATED_{file_name}",
+                        mime="application/octet-stream",
+                        type="primary",
+                        use_container_width=True
+                    )
 
 # Teach term (manual in GitHub)
 with st.expander("➕ Teach Johny a new term (edit glossary.txt in GitHub)"):
