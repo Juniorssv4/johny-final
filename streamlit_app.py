@@ -2,15 +2,14 @@ import streamlit as st
 import time
 import google.generativeai as genai
 import requests
+import base64  # ← Added this import for auto-download
 from io import BytesIO
 from docx import Document
 from openpyxl import load_workbook
 from pptx import Presentation
 from tenacity import retry, stop_after_attempt, wait_exponential, RetryError
 
-# ───────────────────────────────────────────────
 # GEMINI CONFIG
-# ───────────────────────────────────────────────
 try:
     genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
 except:
@@ -86,9 +85,7 @@ Text: {text}"""
         st.error(f"API error: {str(e)}")
         return "[Failed — try again]"
 
-# ───────────────────────────────────────────────
 # UI
-# ───────────────────────────────────────────────
 st.set_page_config(
     page_title="Johny",
     page_icon="https://raw.githubusercontent.com/Juniorssv4/johny-final/main/Johny.png",
@@ -191,13 +188,13 @@ with tab2:
                 output.seek(0)
                 st.success("Translation complete! File auto-downloading...")
 
-                # Auto-download trigger (JavaScript)
+                # Auto-download trigger
                 filename = f"TRANSLATED_{file_name}"
                 b64 = base64.b64encode(output.getvalue()).decode()
-                href = f'<a href="data:application/octet-stream;base64,{b64}" download="{filename}" id="auto-download-link">Download</a>'
+                href = f'<a href="data:application/octet-stream;base64,{b64}" download="{filename}" id="auto-download-link" style="display:none;">Download</a>'
                 st.markdown(href, unsafe_allow_html=True)
 
-                # Auto-click simulation via JS
+                # Auto-click via JS
                 js = """
                 <script>
                 const link = document.getElementById('auto-download-link');
@@ -206,7 +203,7 @@ with tab2:
                 """
                 st.markdown(js, unsafe_allow_html=True)
 
-                # Manual download button as backup
+                # Manual download as backup
                 st.download_button(
                     label="📥 Manual Download (if auto didn't start)",
                     data=output,
