@@ -2,19 +2,21 @@ import streamlit as st
 import time
 import google.generativeai as genai
 import requests
+import base64
 from io import BytesIO
 from docx import Document
 from openpyxl import load_workbook
 from pptx import Presentation
 from tenacity import retry, stop_after_attempt, wait_exponential, RetryError
 
-# GEMINI CONFIG (your existing code)
+# GEMINI CONFIG
 try:
     genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
 except:
     st.error("Add GEMINI_API_KEY in Secrets")
     st.stop()
 
+# Primary and fallback models
 PRIMARY_MODEL = "gemini-2.5-flash"
 FALLBACK_MODEL = "gemini-1.5-flash"
 
@@ -23,11 +25,15 @@ if "current_model" not in st.session_state:
 
 model = genai.GenerativeModel(st.session_state.current_model)
 
-@retry(stop=stop_after_attempt(6), wait=wait_exponential(multiplier=1, min=4, max=60))
+# Backoff for rate limits
+@retry(
+    stop=stop_after_attempt(6),
+    wait=wait_exponential(multiplier=1, min=4, max=60)
+)
 def safe_generate_content(prompt):
     return model.generate_content(prompt)
 
-# Glossary (your existing code)
+# Glossary from repo file
 if "glossary" not in st.session_state:
     try:
         raw_url = "https://raw.githubusercontent.com/Juniorssv4/johny-final/main/glossary.txt"
@@ -181,25 +187,52 @@ with tab2:
 
                 output.seek(0)
 
-                # Clear success message + manual download
-                st.success("Translation complete! Click the button below to download your file.")
-                st.info("If the download doesn't start automatically, click the button below.")
-
                 filename = f"TRANSLATED_{file_name}"
+                mime_type = "application/octet-stream"
+
+                # Success message
+                st.success("Translation complete! File should auto-download shortly...")
+
+                # Hidden auto-download button
+                auto_key = "auto_download_" + str(time.time())
                 st.download_button(
-                    label="📥 Download Translated File Now",
+                    label="Auto Download (hidden)",
                     data=output,
                     file_name=filename,
-                    mime="application/octet-stream",
+                    mime=mime_type,
+                    key=auto_key,
+                    use_container_width=False,
                     type="primary",
-                    use_container_width=True,
-                    key="download_btn"
+                    disabled=True  # hide visually
                 )
 
-                # Optional: auto-download fallback message
-                st.caption("Note: Some browsers block auto-downloads. Use the button above if nothing happens.")
+                # JS to trigger hidden button
+                js = f"""
+                <script>
+                    const buttons = parent.document.querySelectorAll('button[kind="primary"]');
+                    for (let btn of buttons) {{
+                        if (btn.innerText.includes("Auto Download (hidden)")) {{
+                            btn.click();
+                            break;
+                        }}
+                    }}
+                </script>
+                """
+                st.components.v1.html(js, height=0)
 
-# Teach term (manual in GitHub)
+                # Visible fallback manual button
+                st.info("If the file doesn't download automatically in 5 seconds, click below:")
+                st.download_button(
+                    label="📥 Manual Download File",
+                    data=output,
+                    file_name=filename,
+                    mime=mime_type,
+                    type="secondary",
+                    use_container_width=True,
+                    key="manual_download"
+                )
+
+# Teach term section (unchanged)
 with st.expander("➕ Teach Johny a new term (edit glossary.txt in GitHub)"):
     st.info("To add term: Edit glossary.txt in repo → add line 'english:lao' → save → reboot app.")
     st.code("Example:\nSamir:ສະຫມີຣ\nhello:ສະບາຍດີ")
