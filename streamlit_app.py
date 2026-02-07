@@ -2,21 +2,19 @@ import streamlit as st
 import time
 import google.generativeai as genai
 import requests
-import base64  # ← Added this import for auto-download
 from io import BytesIO
 from docx import Document
 from openpyxl import load_workbook
 from pptx import Presentation
 from tenacity import retry, stop_after_attempt, wait_exponential, RetryError
 
-# GEMINI CONFIG
+# GEMINI CONFIG (your existing code)
 try:
     genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
 except:
     st.error("Add GEMINI_API_KEY in Secrets")
     st.stop()
 
-# Primary and fallback models
 PRIMARY_MODEL = "gemini-2.5-flash"
 FALLBACK_MODEL = "gemini-1.5-flash"
 
@@ -25,15 +23,11 @@ if "current_model" not in st.session_state:
 
 model = genai.GenerativeModel(st.session_state.current_model)
 
-# Backoff for rate limits
-@retry(
-    stop=stop_after_attempt(6),
-    wait=wait_exponential(multiplier=1, min=4, max=60)
-)
+@retry(stop=stop_after_attempt(6), wait=wait_exponential(multiplier=1, min=4, max=60))
 def safe_generate_content(prompt):
     return model.generate_content(prompt)
 
-# Glossary from repo file (manual edit in GitHub)
+# Glossary (your existing code)
 if "glossary" not in st.session_state:
     try:
         raw_url = "https://raw.githubusercontent.com/Juniorssv4/johny-final/main/glossary.txt"
@@ -186,32 +180,24 @@ with tab2:
                     prs.save(output)
 
                 output.seek(0)
-                st.success("Translation complete! File auto-downloading...")
 
-                # Auto-download trigger
+                # Clear success message + manual download
+                st.success("Translation complete! Click the button below to download your file.")
+                st.info("If the download doesn't start automatically, click the button below.")
+
                 filename = f"TRANSLATED_{file_name}"
-                b64 = base64.b64encode(output.getvalue()).decode()
-                href = f'<a href="data:application/octet-stream;base64,{b64}" download="{filename}" id="auto-download-link" style="display:none;">Download</a>'
-                st.markdown(href, unsafe_allow_html=True)
-
-                # Auto-click via JS
-                js = """
-                <script>
-                const link = document.getElementById('auto-download-link');
-                if (link) link.click();
-                </script>
-                """
-                st.markdown(js, unsafe_allow_html=True)
-
-                # Manual download as backup
                 st.download_button(
-                    label="📥 Manual Download (if auto didn't start)",
+                    label="📥 Download Translated File Now",
                     data=output,
                     file_name=filename,
                     mime="application/octet-stream",
                     type="primary",
-                    use_container_width=True
+                    use_container_width=True,
+                    key="download_btn"
                 )
+
+                # Optional: auto-download fallback message
+                st.caption("Note: Some browsers block auto-downloads. Use the button above if nothing happens.")
 
 # Teach term (manual in GitHub)
 with st.expander("➕ Teach Johny a new term (edit glossary.txt in GitHub)"):
