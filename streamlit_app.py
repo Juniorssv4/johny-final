@@ -2,7 +2,6 @@ import streamlit as st
 import time
 import google.generativeai as genai
 import requests
-import base64
 from io import BytesIO
 from docx import Document
 from openpyxl import load_workbook
@@ -16,6 +15,7 @@ except:
     st.error("Add GEMINI_API_KEY in Secrets")
     st.stop()
 
+# Primary and fallback models
 PRIMARY_MODEL = "gemini-2.5-flash"
 FALLBACK_MODEL = "gemini-1.5-flash"
 
@@ -26,8 +26,8 @@ model = genai.GenerativeModel(st.session_state.current_model)
 
 # Backoff for rate limits
 @retry(
-    stop=stop_after_attempt(8),
-    wait=wait_exponential(multiplier=1, min=5, max=90)
+    stop=stop_after_attempt(6),
+    wait=wait_exponential(multiplier=1, min=4, max=60)
 )
 def safe_generate_content(prompt):
     return model.generate_content(prompt)
@@ -54,40 +54,37 @@ glossary = st.session_state.glossary
 def get_glossary_prompt():
     if glossary:
         terms = "\n".join([f"• {e.capitalize()} → {l}" for e, l in glossary.items()])
-        return f"Use EXACTLY these terms:\n{terms}\nNever change or add alternatives.\n"
+        return f"Use EXACTLY these terms:\n{terms}\n"
     return ""
 
-# ───────────────────────────────────────────────
-# BATCHED TRANSLATION (5 texts per request)
-# ───────────────────────────────────────────────
-BATCH_SIZE = 5
-
-def translate_batch(texts, direction):
-    if not texts:
-        return [""] * len(texts)
+def translate_text(text, direction):
+    if not text.strip():
+        return ""
     target = "Lao" if direction == "English → Lao" else "English"
-    numbered_texts = "\n".join([f"[{i+1}] {t}" for i, t in enumerate(texts)])
-    prompt = f"""{get_glossary_prompt()}
-Translate ONLY the numbered texts to {target}.
-Return ONLY a JSON list of translations in the same order: ["trans1", "trans2", ...]
+    prompt = f"""{get_glossary_prompt()}Translate ONLY the text to {target}.
+Return ONLY the translation.
 
-Texts:
-{numbered_texts}"""
+Text: {text}"""
 
     try:
         response = safe_generate_content(prompt)
-        cleaned = response.text.strip().replace("```json", "").replace("```", "")
-        translations = json.loads(cleaned)
-        if not isinstance(translations, list) or len(translations) != len(texts):
-            raise ValueError("Invalid batch response")
-        return translations
+        return response.text.strip()
+    except RetryError as e:
+        if "429" in str(e.last_attempt.exception()) or "quota" in str(e.last_attempt.exception()).lower():
+            if st.session_state.current_model == PRIMARY_MODEL:
+                st.session_state.current_model = FALLBACK_MODEL
+                st.info("Rate limit on gemini-2.5-flash — switched to gemini-1.5-flash.")
+                global model
+                model = genai.GenerativeModel(FALLBACK_MODEL)
+                response = model.generate_content(prompt)
+                return response.text.strip()
+        st.error("Timed out after retries — try again in 5 minutes.")
+        return "[Failed — try later]"
     except Exception as e:
-        st.warning(f"Batch translation failed: {str(e)}. Falling back to single requests.")
-        return [translate_text(t, direction) for t in texts]
+        st.error(f"API error: {str(e)}")
+        return "[Failed — try again]"
 
-# ───────────────────────────────────────────────
 # UI
-# ───────────────────────────────────────────────
 st.set_page_config(
     page_title="Johny",
     page_icon="https://raw.githubusercontent.com/Juniorssv4/johny-final/main/Johny.png",
@@ -165,32 +162,19 @@ with tab2:
                 status_text = st.empty()
 
                 translated_count = 0
-                text_batch = []
-                batch_indices = []
 
                 for element_type, element in elements_list:
+                    status_text.text(f"Translating... {translated_count}/{total_elements}")
+
                     if element_type == "para":
-                        text_batch.append(element.text)
+                        translated = translate_text(element.text, direction)
+                        element.text = translated
                     elif element_type == "cell":
-                        text_batch.append(element.value)
-                    batch_indices.append((element_type, element))
+                        translated = translate_text(element.value, direction)
+                        element.value = translated
 
-                    if len(text_batch) == BATCH_SIZE or (translated_count + len(text_batch) == total_elements):
-                        status_text.text(f"Translating batch... {translated_count}/{total_elements}")
-                        translations = translate_batch(text_batch, direction)
-
-                        for i, trans in enumerate(translations):
-                            etype, elem = batch_indices[i]
-                            if etype == "para":
-                                elem.text = trans
-                            elif etype == "cell":
-                                elem.value = trans
-
-                        translated_count += len(text_batch)
-                        progress_bar.progress(translated_count / total_elements)
-
-                        text_batch = []
-                        batch_indices = []
+                    translated_count += 1
+                    progress_bar.progress(translated_count / total_elements)
 
                 status_text.text("Saving file...")
                 if ext == "docx":
@@ -205,48 +189,25 @@ with tab2:
                 filename = f"TRANSLATED_{file_name}"
                 mime_type = "application/octet-stream"
 
-                st.success("Translation complete! File should auto-download shortly...")
+                # Final success + clear instructions
+                st.success("Translation complete!")
+                st.info("Click the big button below to download your translated file. Your browser may block auto-downloads — this button always works!")
 
-                # Hidden auto-download button
-                auto_key = "auto_download_" + str(time.time())
+                # Big, prominent manual download button
                 st.download_button(
-                    label="Auto Download (hidden)",
+                    label="📥 DOWNLOAD TRANSLATED FILE NOW",
                     data=output,
                     file_name=filename,
                     mime=mime_type,
-                    key=auto_key,
-                    use_container_width=False,
                     type="primary",
-                    disabled=True
-                )
-
-                # JS to attempt auto-click
-                js = f"""
-                <script>
-                    const buttons = parent.document.querySelectorAll('button[kind="primary"]');
-                    for (let btn of buttons) {{
-                        if (btn.innerText.includes("Auto Download (hidden)")) {{
-                            btn.click();
-                            break;
-                        }}
-                    }}
-                </script>
-                """
-                st.components.v1.html(js, height=0)
-
-                # Fallback manual button
-                st.info("If auto-download doesn't start in 5 seconds, click below:")
-                st.download_button(
-                    label="📥 Manual Download File",
-                    data=output,
-                    file_name=filename,
-                    mime=mime_type,
-                    type="secondary",
                     use_container_width=True,
-                    key="manual_download"
+                    key="download_btn_" + str(time.time()),
+                    help="Click here to save the translated file to your device"
                 )
 
-# Teach term (unchanged)
+                st.caption("Tip: If nothing happens, refresh the page or try in another browser (Chrome works best).")
+
+# Teach term (manual in GitHub)
 with st.expander("➕ Teach Johny a new term (edit glossary.txt in GitHub)"):
     st.info("To add term: Edit glossary.txt in repo → add line 'english:lao' → save → reboot app.")
     st.code("Example:\nSamir:ສະຫມີຣ\nhello:ສະບາຍດີ")
