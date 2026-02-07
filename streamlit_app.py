@@ -8,7 +8,9 @@ from openpyxl import load_workbook
 from pptx import Presentation
 from tenacity import retry, stop_after_attempt, wait_exponential, RetryError
 
+# ───────────────────────────────────────────────
 # GEMINI CONFIG
+# ───────────────────────────────────────────────
 try:
     genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
 except:
@@ -84,7 +86,9 @@ Text: {text}"""
         st.error(f"API error: {str(e)}")
         return "[Failed — try again]"
 
+# ───────────────────────────────────────────────
 # UI
+# ───────────────────────────────────────────────
 st.set_page_config(
     page_title="Johny",
     page_icon="https://raw.githubusercontent.com/Juniorssv4/johny-final/main/Johny.png",
@@ -105,7 +109,6 @@ with tab1:
             st.write(result)
 
 with tab2:
-    # Updated: allow up to 50 MB
     uploaded_file = st.file_uploader("Upload DOCX • XLSX • PPTX (max 50MB)", type=["docx", "xlsx", "pptx"])
 
     if uploaded_file:
@@ -157,44 +160,61 @@ with tab2:
 
                 if total_elements == 0:
                     st.warning("No text found in file.")
-                else:
-                    progress_bar = st.progress(0)
-                    status_text = st.empty()
+                    st.stop()
 
-                    translated_count = 0
+                progress_bar = st.progress(0)
+                status_text = st.empty()
 
-                    for element_type, element in elements_list:
-                        status_text.text(f"Translating... {translated_count}/{total_elements}")
+                translated_count = 0
 
-                        if element_type == "para":
-                            translated = translate_text(element.text, direction)
-                            element.text = translated
-                        elif element_type == "cell":
-                            translated = translate_text(element.value, direction)
-                            element.value = translated
+                for element_type, element in elements_list:
+                    status_text.text(f"Translating... {translated_count}/{total_elements}")
 
-                        translated_count += 1
-                        progress_bar.progress(translated_count / total_elements)
+                    if element_type == "para":
+                        translated = translate_text(element.text, direction)
+                        element.text = translated
+                    elif element_type == "cell":
+                        translated = translate_text(element.value, direction)
+                        element.value = translated
 
-                    status_text.text("Saving file...")
-                    if ext == "docx":
-                        doc.save(output)
-                    elif ext == "xlsx":
-                        wb.save(output)
-                    elif ext == "pptx":
-                        prs.save(output)
+                    translated_count += 1
+                    progress_bar.progress(translated_count / total_elements)
 
-                    output.seek(0)
-                    st.success("File translated perfectly!")
+                status_text.text("Saving file...")
+                if ext == "docx":
+                    doc.save(output)
+                elif ext == "xlsx":
+                    wb.save(output)
+                elif ext == "pptx":
+                    prs.save(output)
 
-                    st.download_button(
-                        label="📥 Download Translated File",
-                        data=output,
-                        file_name=f"TRANSLATED_{file_name}",
-                        mime="application/octet-stream",
-                        type="primary",
-                        use_container_width=True
-                    )
+                output.seek(0)
+                st.success("Translation complete! File auto-downloading...")
+
+                # Auto-download trigger (JavaScript)
+                filename = f"TRANSLATED_{file_name}"
+                b64 = base64.b64encode(output.getvalue()).decode()
+                href = f'<a href="data:application/octet-stream;base64,{b64}" download="{filename}" id="auto-download-link">Download</a>'
+                st.markdown(href, unsafe_allow_html=True)
+
+                # Auto-click simulation via JS
+                js = """
+                <script>
+                const link = document.getElementById('auto-download-link');
+                if (link) link.click();
+                </script>
+                """
+                st.markdown(js, unsafe_allow_html=True)
+
+                # Manual download button as backup
+                st.download_button(
+                    label="📥 Manual Download (if auto didn't start)",
+                    data=output,
+                    file_name=filename,
+                    mime="application/octet-stream",
+                    type="primary",
+                    use_container_width=True
+                )
 
 # Teach term (manual in GitHub)
 with st.expander("➕ Teach Johny a new term (edit glossary.txt in GitHub)"):
