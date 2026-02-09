@@ -6,3 +6,4 @@ Cluster Munition:ລະເບີດລູກຫວ່ານ
 demolition:ການທຳລາຍ
 acknowledged:ຊາບ
 Laos:ປະເທດລາວ
+firing pin:ເຂັມສັບ
