@@ -7,3 +7,4 @@ demolition:ການທຳລາຍ
 acknowledged:ຊາບ
 Laos:ປະເທດລາວ
 firing pin:ເຂັມສັບ
+Site supervisor:ຜູ້ນຳພາໜ້າວຽກ
