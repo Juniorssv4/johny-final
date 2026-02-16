@@ -33,7 +33,7 @@ def safe_generate_content(prompt):
     return model.generate_content(prompt)
 
 # Glossary from repo file
-if "glossary" not in st.session_state:
+def load_glossary():
     try:
         raw_url = "https://raw.githubusercontent.com/Juniorssv4/johny-final/main/glossary.txt"
         response = requests.get(raw_url)
@@ -45,11 +45,21 @@ if "glossary" not in st.session_state:
             if line and ":" in line:
                 eng, lao = line.split(":", 1)
                 glossary_dict[eng.strip().lower()] = lao.strip()
-        st.session_state.glossary = glossary_dict
-    except:
-        st.session_state.glossary = {}
+        return glossary_dict
+    except Exception as e:
+        st.error(f"Glossary load failed: {str(e)}")
+        return {}
+
+# Load or reload glossary
+if "glossary" not in st.session_state:
+    st.session_state.glossary = load_glossary()
 
 glossary = st.session_state.glossary
+
+# Debug reload button (remove this later if you don't want it)
+if st.button("Reload glossary from GitHub (debug)"):
+    st.session_state.glossary = load_glossary()
+    st.rerun()
 
 def get_glossary_prompt():
     if glossary:
@@ -63,9 +73,7 @@ def translate_text(text, direction):
     target = "Lao" if direction == "English → Lao" else "English"
     prompt = f"""{get_glossary_prompt()}Translate ONLY the text to {target}.
 Return ONLY the translation.
-
 Text: {text}"""
-
     try:
         response = safe_generate_content(prompt)
         return response.text.strip()
@@ -90,6 +98,7 @@ st.set_page_config(
     page_icon="https://raw.githubusercontent.com/Juniorssv4/johny-final/main/Johny.png",
     layout="centered"
 )
+
 st.title("😊 Johny — NPA Lao Translator")
 
 direction = st.radio("Direction", ["English → Lao", "Lao → English"], horizontal=True)
@@ -106,7 +115,6 @@ with tab1:
 
 with tab2:
     uploaded_file = st.file_uploader("Upload DOCX • XLSX • PPTX (max 50MB)", type=["docx", "xlsx", "pptx"])
-
     if uploaded_file:
         MAX_SIZE_MB = 50
         if uploaded_file.size > MAX_SIZE_MB * 1024 * 1024:
@@ -117,10 +125,8 @@ with tab2:
                 file_name = uploaded_file.name
                 ext = file_name.rsplit(".", 1)[-1].lower()
                 output = BytesIO()
-
                 total_elements = 0
                 elements_list = []
-
                 if ext == "docx":
                     doc = Document(BytesIO(file_bytes))
                     for p in doc.paragraphs:
@@ -134,7 +140,6 @@ with tab2:
                                     if p.text.strip():
                                         total_elements += 1
                                         elements_list.append(("para", p))
-
                 elif ext == "xlsx":
                     wb = load_workbook(BytesIO(file_bytes))
                     for ws in wb.worksheets:
@@ -143,7 +148,6 @@ with tab2:
                                 if isinstance(cell.value, str) and cell.value.strip():
                                     total_elements += 1
                                     elements_list.append(("cell", cell))
-
                 elif ext == "pptx":
                     prs = Presentation(BytesIO(file_bytes))
                     for slide in prs.slides:
@@ -153,29 +157,22 @@ with tab2:
                                     if p.text.strip():
                                         total_elements += 1
                                         elements_list.append(("para", p))
-
                 if total_elements == 0:
                     st.warning("No text found in file.")
                     st.stop()
-
                 progress_bar = st.progress(0)
                 status_text = st.empty()
-
                 translated_count = 0
-
                 for element_type, element in elements_list:
                     status_text.text(f"Translating... {translated_count}/{total_elements}")
-
                     if element_type == "para":
                         translated = translate_text(element.text, direction)
                         element.text = translated
                     elif element_type == "cell":
                         translated = translate_text(element.value, direction)
                         element.value = translated
-
                     translated_count += 1
                     progress_bar.progress(translated_count / total_elements)
-
                 status_text.text("Saving file...")
                 if ext == "docx":
                     doc.save(output)
@@ -183,16 +180,12 @@ with tab2:
                     wb.save(output)
                 elif ext == "pptx":
                     prs.save(output)
-
                 output.seek(0)
-
                 filename = f"TRANSLATED_{file_name}"
                 mime_type = "application/octet-stream"
-
                 # Final success + clear instructions
                 st.success("Translation complete!")
                 st.info("Click the big button below to download your translated file. Your browser may block auto-downloads — this button always works!")
-
                 # Big, prominent manual download button
                 st.download_button(
                     label="📥 DOWNLOAD TRANSLATED FILE NOW",
@@ -204,12 +197,16 @@ with tab2:
                     key="download_btn_" + str(time.time()),
                     help="Click here to save the translated file to your device"
                 )
-
                 st.caption("Tip: If nothing happens, refresh the page or try in another browser (Chrome works best).")
 
 # Teach term (manual in GitHub)
 with st.expander("➕ Teach Johny a new term (edit glossary.txt in GitHub)"):
-    st.info("To add term: Edit glossary.txt in repo → add line 'english:lao' → save → reboot app.")
+    st.info("To add term: Edit glossary.txt in repo → add line 'english:lao' → save → click 'Reload glossary' button below → reboot app if needed.")
     st.code("Example:\nSamir:ສະຫມີຣ\nhello:ສະບາຍດີ")
+
+# Debug reload button
+if st.button("Reload glossary from GitHub (debug – use when you edit glossary.txt)"):
+    st.session_state.glossary = load_glossary()
+    st.rerun()
 
 st.caption(f"Active glossary: {len(glossary)} terms • Model: {st.session_state.current_model}")
