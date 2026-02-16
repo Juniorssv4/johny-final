@@ -41,7 +41,7 @@ def safe_generate_content(prompt):
     return model.generate_content(prompt)
 
 # ───────────────────────────────────────────────
-# GLOSSARY: LOAD + EDIT + SAVE TO GITHUB
+# GLOSSARY: LOAD FROM GITHUB + EDIT/SAVE IN-APP
 # ───────────────────────────────────────────────
 def load_glossary():
     try:
@@ -233,14 +233,6 @@ with tab2:
 # Teach Johny in-app (add new terms and save to GitHub)
 with st.expander("➕ Teach Johny a new term (add in app & save to GitHub)"):
     st.info("Add new terms here. Changes are saved to glossary.txt in GitHub and used immediately in translations.")
-
-    # Show current glossary
-    if glossary:
-        st.write("Current terms (English → Lao):")
-        for eng, lao in sorted(glossary.items()):
-            st.write(f"**{eng.capitalize()}** → {lao}")
-    else:
-        st.info("No terms loaded yet.")
 
     # Form to add new term
     col1, col2 = st.columns(2)
