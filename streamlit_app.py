@@ -32,34 +32,27 @@ model = genai.GenerativeModel(st.session_state.current_model)
 def safe_generate_content(prompt):
     return model.generate_content(prompt)
 
-# Glossary from repo file
-def load_glossary():
-    try:
-        raw_url = "https://raw.githubusercontent.com/Juniorssv4/johny-final/main/glossary.txt"
-        response = requests.get(raw_url)
-        response.raise_for_status()
-        lines = response.text.splitlines()
-        glossary_dict = {}
-        for line in lines:
-            line = line.strip()
-            if line and ":" in line:
-                eng, lao = line.split(":", 1)
-                glossary_dict[eng.strip().lower()] = lao.strip()
-        return glossary_dict
-    except Exception as e:
-        st.error(f"Glossary load failed: {str(e)}")
-        return {}
-
-# Load or reload glossary
-if "glossary" not in st.session_state:
-    st.session_state.glossary = load_glossary()
+# Glossary from repo file – RELOAD EVERY TIME the app runs
+try:
+    # Cache-busting timestamp to force fresh download from GitHub
+    raw_url = f"https://raw.githubusercontent.com/Juniorssv4/johny-final/main/glossary.txt?cachebust={int(time.time())}"
+    response = requests.get(raw_url)
+    response.raise_for_status()
+    lines = response.text.splitlines()
+    glossary_dict = {}
+    for line in lines:
+        line = line.strip()
+        if line and ":" in line:
+            parts = line.split(":", 1)
+            eng = parts[0].strip().lower()
+            lao = parts[1].strip() if len(parts) > 1 else ""
+            glossary_dict[eng] = lao
+    st.session_state.glossary = glossary_dict
+except Exception as e:
+    st.session_state.glossary = {}
+    st.error(f"Glossary load failed: {str(e)}")
 
 glossary = st.session_state.glossary
-
-# Debug reload button (remove this later if you don't want it)
-if st.button("Reload glossary from GitHub (debug)"):
-    st.session_state.glossary = load_glossary()
-    st.rerun()
 
 def get_glossary_prompt():
     if glossary:
@@ -183,10 +176,8 @@ with tab2:
                 output.seek(0)
                 filename = f"TRANSLATED_{file_name}"
                 mime_type = "application/octet-stream"
-                # Final success + clear instructions
                 st.success("Translation complete!")
                 st.info("Click the big button below to download your translated file. Your browser may block auto-downloads — this button always works!")
-                # Big, prominent manual download button
                 st.download_button(
                     label="📥 DOWNLOAD TRANSLATED FILE NOW",
                     data=output,
@@ -201,12 +192,7 @@ with tab2:
 
 # Teach term (manual in GitHub)
 with st.expander("➕ Teach Johny a new term (edit glossary.txt in GitHub)"):
-    st.info("To add term: Edit glossary.txt in repo → add line 'english:lao' → save → click 'Reload glossary' button below → reboot app if needed.")
+    st.info("To add term: Edit glossary.txt in repo → add line 'english:lao' → save → refresh app page.")
     st.code("Example:\nSamir:ສະຫມີຣ\nhello:ສະບາຍດີ")
-
-# Debug reload button
-if st.button("Reload glossary from GitHub (debug – use when you edit glossary.txt)"):
-    st.session_state.glossary = load_glossary()
-    st.rerun()
 
 st.caption(f"Active glossary: {len(glossary)} terms • Model: {st.session_state.current_model}")
