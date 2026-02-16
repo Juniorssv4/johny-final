@@ -192,7 +192,12 @@ with tab2:
 
 # Teach term (manual in GitHub)
 with st.expander("➕ Teach Johny a new term (edit glossary.txt in GitHub)"):
-    st.info("To add term: Edit glossary.txt in repo → add line 'english:lao' → save → refresh app page.")
+    st.info("To add term: Edit glossary.txt in repo → add line 'english:lao' → save → refresh app page or click 'Reload Glossary' button below.")
     st.code("Example:\nSamir:ສະຫມີຣ\nhello:ສະບາຍດີ")
+
+# Manual reload button – use this right after you edit glossary.txt on GitHub
+st.markdown("---")
+if st.button("🔄 Reload Glossary from GitHub (use after editing glossary.txt)", type="primary"):
+    st.rerun()
 
 st.caption(f"Active glossary: {len(glossary)} terms • Model: {st.session_state.current_model}")
