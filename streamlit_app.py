@@ -32,9 +32,9 @@ model = genai.GenerativeModel(st.session_state.current_model)
 def safe_generate_content(prompt):
     return model.generate_content(prompt)
 
-# Glossary from repo file – RELOAD EVERY TIME the app runs
+# Glossary from repo file – RELOAD EVERY TIME + cache-bust
 try:
-    # Cache-busting timestamp to force fresh download from GitHub
+    # Cache-bust with timestamp to force fresh download from GitHub
     raw_url = f"https://raw.githubusercontent.com/Juniorssv4/johny-final/main/glossary.txt?cachebust={int(time.time())}"
     response = requests.get(raw_url)
     response.raise_for_status()
