@@ -32,12 +32,12 @@ model = genai.GenerativeModel(st.session_state.current_model)
 def safe_generate_content(prompt):
     return model.generate_content(prompt)
 
-# Glossary from repo file – RELOAD EVERY SINGLE RUN + cache-bust
+# Glossary from repo file – READ EVERY TIME, NO CACHE
 try:
-    # Cache-bust with timestamp + random to break GitHub CDN cache
-    cache_bust = f"{int(time.time())}_{str(hash(str(time.time())))[-6:]}"
+    # Strong cache-bust to force fresh file from GitHub every single run
+    cache_bust = f"{int(time.time() * 1000)}_{str(hash(str(time.time())))[-8:]}"
     raw_url = f"https://raw.githubusercontent.com/Juniorssv4/johny-final/main/glossary.txt?cachebust={cache_bust}"
-    response = requests.get(raw_url)
+    response = requests.get(raw_url, timeout=10)
     response.raise_for_status()
     lines = response.text.splitlines()
     glossary_dict = {}
@@ -48,12 +48,10 @@ try:
             eng = parts[0].strip().lower()
             lao = parts[1].strip() if len(parts) > 1 else ""
             glossary_dict[eng] = lao
-    st.session_state.glossary = glossary_dict
+    glossary = glossary_dict
 except Exception as e:
-    st.session_state.glossary = {}
-    st.error(f"Glossary load failed: {str(e)}")
-
-glossary = st.session_state.glossary
+    glossary = {}
+    st.error(f"Failed to load glossary: {str(e)}")
 
 def get_glossary_prompt():
     if glossary:
@@ -193,12 +191,13 @@ with tab2:
 
 # Teach term (manual in GitHub)
 with st.expander("➕ Teach Johny a new term (edit glossary.txt in GitHub)"):
-    st.info("To add term: Edit glossary.txt in repo → add line 'english:lao' → save → click the red reload button below or refresh page.")
+    st.info("To add term: Edit glossary.txt in repo → add line 'english:lao' → save → refresh page or click reload button below.")
     st.code("Example:\nSamir:ສະຫມີຣ\nhello:ສະບາຍດີ")
 
 # Big red manual reload button – click this RIGHT AFTER you commit changes to glossary.txt
 st.markdown("---")
-if st.button("🔴 RELOAD GLOSSARY FROM GITHUB (click after editing & committing glossary.txt)", type="primary", use_container_width=True):
+st.markdown("<h3 style='color:red;'>If you just edited glossary.txt on GitHub, click this button now:</h3>", unsafe_allow_html=True)
+if st.button("🔴 RELOAD GLOSSARY FROM GITHUB (click after editing & committing)", type="primary", use_container_width=True):
     st.rerun()
 
 st.caption(f"Active glossary: {len(glossary)} terms • Model: {st.session_state.current_model}")
