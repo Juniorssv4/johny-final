@@ -7,21 +7,13 @@ from docx import Document
 from openpyxl import load_workbook
 from pptx import Presentation
 from tenacity import retry, stop_after_attempt, wait_exponential, RetryError
-import json
-import base64
 
-# ───────────────────────────────────────────────
-# SECRETS & CONFIG
-# ───────────────────────────────────────────────
+# GEMINI CONFIG
 try:
     genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
 except:
     st.error("Add GEMINI_API_KEY in Secrets")
     st.stop()
-
-GITHUB_TOKEN = st.secrets["GITHUB_TOKEN"]
-GITHUB_REPO = st.secrets["GITHUB_REPO"]
-GLOSSARY_FILE = "glossary.txt"
 
 # Primary and fallback models
 PRIMARY_MODEL = "gemini-2.5-flash"
@@ -40,59 +32,25 @@ model = genai.GenerativeModel(st.session_state.current_model)
 def safe_generate_content(prompt):
     return model.generate_content(prompt)
 
-# ───────────────────────────────────────────────
-# GLOSSARY: LOAD FROM GITHUB + EDIT/SAVE IN-APP
-# ───────────────────────────────────────────────
-def load_glossary():
-    try:
-        raw_url = f"https://raw.githubusercontent.com/{GITHUB_REPO}/main/{GLOSSARY_FILE}?cachebust={int(time.time())}"
-        response = requests.get(raw_url, timeout=10)
-        response.raise_for_status()
-        lines = response.text.splitlines()
-        glossary_dict = {}
-        for line in lines:
-            line = line.strip()
-            if line and ":" in line:
-                parts = line.split(":", 1)
-                eng = parts[0].strip().lower()
-                lao = parts[1].strip() if len(parts) > 1 else ""
-                glossary_dict[eng] = lao
-        return glossary_dict
-    except Exception as e:
-        st.error(f"Failed to load glossary: {str(e)}")
-        return {}
-
-def save_glossary_to_github(glossary_dict):
-    try:
-        # Get current file SHA
-        url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{GLOSSARY_FILE}"
-        headers = {"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
-        response = requests.get(url, headers=headers)
-        sha = response.json().get('sha') if response.status_code == 200 else None
-
-        # Build file content (sorted by English term)
-        lines = [f"{eng.capitalize()}: {lao}" for eng, lao in sorted(glossary_dict.items())]
-        content = "\n".join(lines) + "\n"
-        encoded_content = base64.b64encode(content.encode()).decode()
-
-        # Commit to GitHub
-        data = {
-            "message": "Update glossary from app",
-            "content": encoded_content,
-            "sha": sha
-        }
-        put_response = requests.put(url, headers=headers, json=data)
-        if put_response.status_code in (200, 201):
-            st.success("Glossary saved to GitHub! Changes are now permanent.")
-            st.session_state.glossary = glossary_dict
-            st.rerun()
-        else:
-            st.error(f"GitHub save failed: {put_response.text}")
-    except Exception as e:
-        st.error(f"Failed to save glossary: {str(e)}")
-
-# Load glossary every run
-glossary = load_glossary()
+# Glossary from public raw GitHub URL – reload every time + cache-bust
+try:
+    cache_bust = f"{int(time.time() * 1000)}_{str(hash(str(time.time())))[-8:]}"
+    raw_url = f"https://raw.githubusercontent.com/Juniorssv4/johny-final/main/glossary.txt?cachebust={cache_bust}"
+    response = requests.get(raw_url, timeout=10)
+    response.raise_for_status()
+    lines = response.text.splitlines()
+    glossary_dict = {}
+    for line in lines:
+        line = line.strip()
+        if line and ":" in line:
+            parts = line.split(":", 1)
+            eng = parts[0].strip().lower()
+            lao = parts[1].strip() if len(parts) > 1 else ""
+            glossary_dict[eng] = lao
+    glossary = glossary_dict
+except Exception as e:
+    glossary = {}
+    st.error(f"Glossary load failed: {str(e)}")
 
 def get_glossary_prompt():
     if glossary:
@@ -230,36 +188,9 @@ with tab2:
                 )
                 st.caption("Tip: If nothing happens, refresh the page or try in another browser (Chrome works best).")
 
-# Teach Johny in-app (edit & save to GitHub)
-with st.expander("➕ Teach Johny a new term (edit in app & save to GitHub)"):
-    st.info("Add or edit terms directly here. Changes are saved to glossary.txt in GitHub and used immediately.")
-
-    # Show current glossary
-    if glossary:
-        st.write("Current terms:")
-        st.json(glossary)
-    else:
-        st.info("No terms loaded yet.")
-
-    # Form to add new term
-    col1, col2 = st.columns(2)
-    with col1:
-        new_eng = st.text_input("English term")
-    with col2:
-        new_lao = st.text_input("Lao translation")
-
-    if st.button("Add / Update Term"):
-        if new_eng and new_lao:
-            glossary[new_eng.strip().lower()] = new_lao.strip()
-            save_glossary_to_github(glossary)
-        else:
-            st.error("Both fields required")
-
-    # Optional: Delete term
-    if glossary:
-        term_to_delete = st.selectbox("Delete term", options=list(glossary.keys()))
-        if st.button("Delete Selected Term"):
-            glossary.pop(term_to_delete, None)
-            save_glossary_to_github(glossary)
+# Teach term (manual in GitHub)
+with st.expander("➕ Teach Johny a new term (edit glossary.txt in GitHub)"):
+    st.info("To add term: Edit glossary.txt in repo → add line 'english:lao' → save → refresh page.")
+    st.code("Example:\nSamir:ສະຫມີຣ\nhello:ສະບາຍດີ")
 
 st.caption(f"Active glossary: {len(glossary)} terms • Model: {st.session_state.current_model}")
