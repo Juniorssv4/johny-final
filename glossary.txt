@@ -3,7 +3,6 @@ Cluster munition: ລະເບີດລູກຫວ່ານ
 Cm: ລະເບີດລູກຫວ່ານ
 Demolition: ການທຳລາຍ
 Firing pin: ເຂັມສັບ
-Gramp: ປູ່
 Ko: ໂກະ
 Laos: ປະເທດລາວ
 Maneevanh: ມະນີວັນ
