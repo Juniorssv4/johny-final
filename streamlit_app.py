@@ -105,17 +105,19 @@ with tab1:
             result = translate_text(text, direction)
             st.success("Translation:")
             
-            # Show translated text in a copyable area
+            # Show translated text
             st.markdown("**Translated text:**")
             st.code(result, language=None)
             
-            # Reliable JS-based copy button
-            st.components.v1.html(f"""
-                <button onclick="navigator.clipboard.writeText(`{result.replace('`', '\\`').replace('"', '\\"')}`)">
-                    📋 Copy to Clipboard
-                </button>
-                <p style="color:green; font-size:0.9em;">Click above to copy. Works on most browsers.</p>
-            """, height=60)
+            # Copy button with JS + green success feedback
+            copy_js = f"""
+                <button onclick="navigator.clipboard.writeText(`{result.replace('`', '\\`').replace('"', '\\"')}`).then(() => {{
+                    document.getElementById('copy-success').style.display = 'block';
+                    setTimeout(() => {{ document.getElementById('copy-success').style.display = 'none'; }}, 3000);
+                }})">📋 Copy to Clipboard</button>
+                <p id="copy-success" style="color:green; display:none; margin-top:8px;">✅ Copied!</p>
+            """
+            st.components.v1.html(copy_js, height=60)
 
 with tab2:
     uploaded_file = st.file_uploader("Upload DOCX • XLSX • PPTX (max 50MB)", type=["docx", "xlsx", "pptx"])
