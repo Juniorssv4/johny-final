@@ -7,6 +7,7 @@ from docx import Document
 from openpyxl import load_workbook
 from pptx import Presentation
 from tenacity import retry, stop_after_attempt, wait_exponential, RetryError
+import uuid
 
 # GEMINI CONFIG
 try:
@@ -32,10 +33,10 @@ model = genai.GenerativeModel(st.session_state.current_model)
 def safe_generate_content(prompt):
     return model.generate_content(prompt)
 
-# Glossary from repo file – FORCE FRESH LOAD EVERY TIME
+# Glossary from repo file – FORCE FRESH LOAD EVERY TIME, NO CACHE
 try:
-    # Cache-bust to get the latest version
-    cache_bust = f"{int(time.time() * 1000)}_{str(hash(str(time.time())))[-8:]}"
+    # Super strong cache-bust to break GitHub CDN and browser cache
+    cache_bust = f"{int(time.time() * 1000)}_{str(uuid.uuid4())[:8]}_{str(hash(str(time.time())))[-6:]}"
     raw_url = f"https://raw.githubusercontent.com/Juniorssv4/johny-final/main/glossary.txt?cachebust={cache_bust}"
     response = requests.get(raw_url, timeout=10)
     response.raise_for_status()
@@ -104,21 +105,17 @@ with tab1:
             result = translate_text(text, direction)
             st.success("Translation:")
             
-            # Show translated text in a copyable text area
-            st.text_area(
-                "Translated text (click to edit if needed):",
-                value=result,
-                height=150,
-                key="translated_output"
-            )
+            # Show translated text in a copyable area
+            st.markdown("**Translated text:**")
+            st.code(result, language=None)
             
-            # Copy button
-            if st.button("📋 Copy Translated Text to Clipboard", key="copy_button"):
-                st.session_state.copied_text = result
-                st.success("Copied to clipboard!", icon="✅")
-                # Clear the flag after showing success
-                time.sleep(3)
-                st.rerun()
+            # Reliable JS-based copy button
+            st.components.v1.html(f"""
+                <button onclick="navigator.clipboard.writeText(`{result.replace('`', '\\`').replace('"', '\\"')}`)">
+                    📋 Copy to Clipboard
+                </button>
+                <p style="color:green; font-size:0.9em;">Click above to copy. Works on most browsers.</p>
+            """, height=60)
 
 with tab2:
     uploaded_file = st.file_uploader("Upload DOCX • XLSX • PPTX (max 50MB)", type=["docx", "xlsx", "pptx"])
@@ -206,7 +203,7 @@ with tab2:
 
 # Teach term (manual in GitHub)
 with st.expander("➕ Teach Johny a new term (edit glossary.txt in GitHub)"):
-    st.info("To add term: Edit glossary.txt in repo → add line 'english:lao' → save → refresh page or click reload button below.")
+    st.info("To add term: Edit glossary.txt in repo → add line 'english:lao' → save → click the red reload button below or refresh page.")
     st.code("Example:\nSamir:ສະຫມີຣ\nhello:ສະບາຍດີ")
 
 # Big red manual reload button – click this RIGHT AFTER you commit changes to glossary.txt
