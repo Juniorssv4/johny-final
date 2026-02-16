@@ -15,3 +15,4 @@ Maneevanh:ມະນີວັນ
 PPB:ໄພພິບັດ
 NPA:ເອັນພີເອ
 UMA:ຜີ
+UMA:ຜີ
