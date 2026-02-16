@@ -34,7 +34,7 @@ def safe_generate_content(prompt):
 
 # Glossary from repo file – RELOAD EVERY TIME + cache-bust
 try:
-    # Cache-bust with timestamp to force fresh download from GitHub
+    # Cache-bust with timestamp to force GitHub to send fresh file
     raw_url = f"https://raw.githubusercontent.com/Juniorssv4/johny-final/main/glossary.txt?cachebust={int(time.time())}"
     response = requests.get(raw_url)
     response.raise_for_status()
@@ -192,12 +192,12 @@ with tab2:
 
 # Teach term (manual in GitHub)
 with st.expander("➕ Teach Johny a new term (edit glossary.txt in GitHub)"):
-    st.info("To add term: Edit glossary.txt in repo → add line 'english:lao' → save → refresh app page or click 'Reload Glossary' button below.")
+    st.info("To add term: Edit glossary.txt in repo → add line 'english:lao' → save → click the red reload button below or refresh page.")
     st.code("Example:\nSamir:ສະຫມີຣ\nhello:ສະບາຍດີ")
 
-# Manual reload button – use this right after you edit glossary.txt on GitHub
+# Manual reload button – big red one, use right after editing glossary.txt on GitHub
 st.markdown("---")
-if st.button("🔄 Reload Glossary from GitHub (use after editing glossary.txt)", type="primary"):
+if st.button("🔄 RELOAD GLOSSARY FROM GITHUB (click after editing glossary.txt)", type="primary", use_container_width=True):
     st.rerun()
 
 st.caption(f"Active glossary: {len(glossary)} terms • Model: {st.session_state.current_model}")
