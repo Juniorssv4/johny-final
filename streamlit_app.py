@@ -32,10 +32,11 @@ model = genai.GenerativeModel(st.session_state.current_model)
 def safe_generate_content(prompt):
     return model.generate_content(prompt)
 
-# Glossary from repo file – RELOAD EVERY TIME + cache-bust
+# Glossary from repo file – RELOAD EVERY SINGLE RUN + cache-bust
 try:
-    # Cache-bust with timestamp to force GitHub to send fresh file
-    raw_url = f"https://raw.githubusercontent.com/Juniorssv4/johny-final/main/glossary.txt?cachebust={int(time.time())}"
+    # Cache-bust with timestamp + random to break GitHub CDN cache
+    cache_bust = f"{int(time.time())}_{str(hash(str(time.time())))[-6:]}"
+    raw_url = f"https://raw.githubusercontent.com/Juniorssv4/johny-final/main/glossary.txt?cachebust={cache_bust}"
     response = requests.get(raw_url)
     response.raise_for_status()
     lines = response.text.splitlines()
@@ -195,9 +196,9 @@ with st.expander("➕ Teach Johny a new term (edit glossary.txt in GitHub)"):
     st.info("To add term: Edit glossary.txt in repo → add line 'english:lao' → save → click the red reload button below or refresh page.")
     st.code("Example:\nSamir:ສະຫມີຣ\nhello:ສະບາຍດີ")
 
-# Manual reload button – big red one, use right after editing glossary.txt on GitHub
+# Big red manual reload button – click this RIGHT AFTER you commit changes to glossary.txt
 st.markdown("---")
-if st.button("🔄 RELOAD GLOSSARY FROM GITHUB (click after editing glossary.txt)", type="primary", use_container_width=True):
+if st.button("🔴 RELOAD GLOSSARY FROM GITHUB (click after editing & committing glossary.txt)", type="primary", use_container_width=True):
     st.rerun()
 
 st.caption(f"Active glossary: {len(glossary)} terms • Model: {st.session_state.current_model}")
