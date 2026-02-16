@@ -7,7 +7,6 @@ from docx import Document
 from openpyxl import load_workbook
 from pptx import Presentation
 from tenacity import retry, stop_after_attempt, wait_exponential, RetryError
-import uuid
 
 # GEMINI CONFIG
 try:
@@ -33,10 +32,10 @@ model = genai.GenerativeModel(st.session_state.current_model)
 def safe_generate_content(prompt):
     return model.generate_content(prompt)
 
-# Glossary from repo file – FORCE FRESH LOAD EVERY TIME, NO CACHE AT ALL
+# Glossary from repo file – RELOAD EVERY TIME + cache-bust
 try:
-    # Very strong cache-bust to break GitHub CDN and browser cache
-    cache_bust = f"{int(time.time() * 1000)}_{str(uuid.uuid4())[:8]}_{str(hash(str(time.time())))[-6:]}"
+    # Cache-bust with timestamp to force fresh download from GitHub
+    cache_bust = f"{int(time.time())}"
     raw_url = f"https://raw.githubusercontent.com/Juniorssv4/johny-final/main/glossary.txt?cachebust={cache_bust}"
     response = requests.get(raw_url, timeout=10)
     response.raise_for_status()
@@ -192,7 +191,7 @@ with tab2:
 
 # Teach term (manual in GitHub)
 with st.expander("➕ Teach Johny a new term (edit glossary.txt in GitHub)"):
-    st.info("To add term: Edit glossary.txt in repo → add line 'english:lao' → save → refresh page or click reload button below.")
+    st.info("To add term: Edit glossary.txt in repo → add line 'english:lao' → save → click the red reload button below or refresh page.")
     st.code("Example:\nSamir:ສະຫມີຣ\nhello:ສະບາຍດີ")
 
 # Big red manual reload button – click this RIGHT AFTER you commit changes to glossary.txt
