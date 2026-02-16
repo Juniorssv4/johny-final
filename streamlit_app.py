@@ -32,9 +32,9 @@ model = genai.GenerativeModel(st.session_state.current_model)
 def safe_generate_content(prompt):
     return model.generate_content(prompt)
 
-# Glossary from repo file – FORCE RELOAD EVERY TIME, NO CACHE + strong cache-bust
+# Glossary from repo file – RELOAD EVERY TIME, NO CACHE
 try:
-    # Strong cache-bust to break GitHub CDN/browser cache
+    # Strong cache-bust to force GitHub to send the latest version
     cache_bust = f"{int(time.time() * 1000)}_{str(hash(str(time.time())))[-8:]}"
     raw_url = f"https://raw.githubusercontent.com/Juniorssv4/johny-final/main/glossary.txt?cachebust={cache_bust}"
     response = requests.get(raw_url, timeout=10)
